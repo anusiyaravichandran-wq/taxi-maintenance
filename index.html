@@ -142,6 +142,44 @@ label{display:block; font-size:12.5px; color:var(--muted); margin-bottom:6px; ma
 .modal-handle{width:40px; height:4px; background:var(--border); border-radius:4px; margin:0 auto 14px;}
 .divider{height:1px; background:var(--border); margin:14px 0;}
 .profit-pos{color:var(--green);} .profit-neg{color:var(--red);}
+
+/* Other Expenses (repeatable rows) */
+.exp-row{display:flex; gap:8px; align-items:flex-start; margin-bottom:8px;}
+.exp-row input{margin-bottom:0;}
+.exp-row .exp-amt{flex:0 0 90px;}
+.exp-row .exp-desc{flex:1;}
+.exp-row .exp-remove{
+  flex:0 0 38px; height:46px; border-radius:12px; border:1.5px solid var(--border);
+  background:var(--bg2); color:var(--red); font-size:18px; cursor:pointer; font-weight:700;
+}
+.btn-add-exp{
+  width:100%; padding:11px; border-radius:12px; border:1.5px dashed var(--border);
+  background:transparent; color:var(--accent2); font-size:13px; font-weight:700; cursor:pointer; margin-top:2px;
+}
+.exp-total-row{display:flex; justify-content:space-between; font-size:12.5px; color:var(--muted); margin-top:8px;}
+
+/* Payout history item actions */
+.history-item .actions{display:flex; gap:8px; margin-top:10px;}
+.history-item .actions button{
+  flex:1; padding:9px; border-radius:10px; font-size:12px; font-weight:700; cursor:pointer;
+  border:1.5px solid var(--border); background:var(--bg2); color:var(--text);
+}
+.history-item .actions .share-btn{border-color:var(--green); color:var(--green);}
+
+/* Share receipt template (rendered off-screen, captured as image) */
+#shareReceipt{
+  position:fixed; left:-9999px; top:0; width:380px; background:#ffffff; color:#111827;
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; padding:22px;
+}
+#shareReceipt .sr-head{text-align:center; margin-bottom:14px;}
+#shareReceipt .sr-head .sr-app{font-size:14px; font-weight:800; color:#0f172a;}
+#shareReceipt .sr-head .sr-date{font-size:20px; font-weight:800; margin-top:4px; color:#0f172a;}
+#shareReceipt .sr-row{display:flex; justify-content:space-between; font-size:13px; padding:6px 0; border-bottom:1px solid #e5e7eb; color:#374151;}
+#shareReceipt .sr-row span:last-child{font-weight:700; color:#111827;}
+#shareReceipt .sr-final{display:flex; justify-content:space-between; margin-top:12px; padding-top:12px; border-top:2px solid #111827;}
+#shareReceipt .sr-final span:first-child{font-size:14px; font-weight:700; color:#111827;}
+#shareReceipt .sr-final span:last-child{font-size:22px; font-weight:800; color:#16a34a;}
+#shareReceipt .sr-status{text-align:center; margin-top:10px; font-size:12px; font-weight:700; padding:5px; border-radius:8px;}
 </style>
 </head>
 <body>
@@ -217,30 +255,37 @@ label{display:block; font-size:12.5px; color:var(--muted); margin-bottom:6px; ma
         <input type="number" id="onlinePayment" placeholder="0">
         <label id="t_discount">Discount Given</label>
         <input type="number" id="discount" placeholder="0">
+        <label id="t_tollbill">Toll in Bill (incl. GST)</label>
+        <input type="number" id="tollBill" placeholder="0">
+        <div class="muted-small" id="t_tollbillhint">If the customer's bill already includes a toll charge line, enter that amount (toll + its GST) here — it's excluded only when calculating driver salary.</div>
       </div>
 
       <div class="card">
         <div class="section-title" id="t_expsec">Expenses</div>
-        <label id="t_fuel">Fuel Amount</label>
-        <input type="number" id="fuelAmount" placeholder="0">
-        <label id="t_fuelmode">Fuel Paid Via</label>
-        <select id="fuelMode">
-          <option value="card" id="t_card">Fuel Card</option>
-          <option value="cash" id="t_cash">Cash (by driver)</option>
-        </select>
+        <div class="grid2">
+          <div><label id="t_fuelcash">Fuel (Cash)</label><input type="number" id="fuelCash" placeholder="0"></div>
+          <div><label id="t_fuelcard">Fuel (Card)</label><input type="number" id="fuelCard" placeholder="0"></div>
+        </div>
         <div class="grid2">
           <div><label id="t_parking">Parking (cash)</label><input type="number" id="parking" placeholder="0"></div>
-          <div><label id="t_toll">Toll (cash)</label><input type="number" id="toll" placeholder="0"></div>
+          <div><label id="t_tollcollected">Toll Collected (FASTag)</label><input type="number" id="tollCollected" placeholder="0"></div>
         </div>
+
+        <label id="t_otherexp" style="margin-top:16px;">Other Expenses</label>
+        <div id="otherExpList"></div>
+        <button type="button" class="btn-add-exp" onclick="addExpenseRow()">+ <span id="t_addexpense">Add Expense</span></button>
+        <div class="exp-total-row"><span id="t_otherexptotal">Other Expenses Total</span><span id="otherExpTotalVal">₹0</span></div>
       </div>
 
       <div class="card" id="liveCalcCard">
         <div class="section-title" id="t_calcsec">Auto Calculated</div>
         <div class="row"><span class="lbl" id="t_totalrev">Total Revenue</span><span class="val" id="calcRevenue">₹0</span></div>
         <div class="row"><span class="lbl" id="t_salary30">Driver Salary (30%)</span><span class="val" id="calcSalary">₹0</span></div>
-        <div class="row"><span class="lbl" id="t_deduct">Less: Cash Fuel+Parking+Toll</span><span class="val" id="calcDeduct">₹0</span></div>
+        <div class="muted-small" id="t_salarybasehint" style="margin-top:-6px;">Calculated on Total Revenue minus Toll-in-Bill</div>
         <div class="divider"></div>
-        <div class="row"><span class="lbl" id="t_netsalary">Net Driver Takes</span><span class="val" id="calcNetSalary">₹0</span></div>
+        <div class="row"><span class="lbl" id="t_addtoll">+ Toll Collected (FASTag)</span><span class="val" id="calcTollCollected" style="color:var(--green);">₹0</span></div>
+        <div class="row"><span class="lbl" id="t_deduct">− Online, Fuel(Cash), Parking, Other Exp.</span><span class="val" id="calcDeduct" style="color:var(--red);">₹0</span></div>
+        <div class="divider"></div>
         <div class="row"><span class="lbl" id="t_owneramt">Owner Amount</span><span class="val" style="color:var(--accent2); font-size:17px;" id="calcOwnerAmt">₹0</span></div>
       </div>
     </div>
@@ -342,6 +387,10 @@ label{display:block; font-size:12.5px; color:var(--muted); margin-bottom:6px; ma
   </div>
 </div>
 
+<!-- Hidden receipt template captured as an image for WhatsApp sharing -->
+<div id="shareReceipt"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
