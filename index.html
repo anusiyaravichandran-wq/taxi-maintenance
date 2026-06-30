@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>டாக்ஸி கணக்கு | Taxi Tracker</title>
+<meta name="theme-color" content="#0f172a">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<style>
+:root{
+  --bg:#0f172a; --bg2:#1e293b; --card:#1e293b; --border:#334155;
+  --accent:#f59e0b; --accent2:#fbbf24; --green:#22c55e; --red:#ef4444;
+  --text:#f1f5f9; --muted:#94a3b8; --blue:#3b82f6;
+}
+*{box-sizing:border-box; margin:0; padding:0;}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  background:var(--bg); color:var(--text); padding-bottom:70px;
+  -webkit-tap-highlight-color:transparent;
+}
+.screen{display:none; padding:16px; max-width:600px; margin:0 auto;}
+.screen.active{display:block;}
+h1,h2,h3{font-weight:700;}
+h1{font-size:22px;} h2{font-size:18px; margin-bottom:12px;}
+.app-header{
+  position:sticky; top:0; background:var(--bg); z-index:10; padding:16px;
+  display:flex; justify-content:space-between; align-items:center;
+  border-bottom:1px solid var(--border);
+}
+.app-header .title{font-size:18px; font-weight:700; display:flex; flex-direction:column;}
+.app-header .title small{color:var(--muted); font-weight:400; font-size:12px;}
+.icon-btn{
+  background:var(--bg2); border:1px solid var(--border); color:var(--text);
+  border-radius:10px; padding:8px 12px; font-size:13px; cursor:pointer;
+}
+.lang-toggle{display:flex; gap:4px;}
+.lang-toggle button{
+  background:var(--bg2); border:1px solid var(--border); color:var(--muted);
+  padding:6px 10px; border-radius:8px; font-size:12px; cursor:pointer;
+}
+.lang-toggle button.on{background:var(--accent); color:#000; border-color:var(--accent);}
+
+/* Login */
+.login-wrap{
+  min-height:100vh; display:flex; flex-direction:column; justify-content:center;
+  align-items:center; padding:24px;
+}
+.login-card{
+  background:var(--card); border:1px solid var(--border); border-radius:18px;
+  padding:28px 24px; width:100%; max-width:360px; text-align:center;
+}
+.login-card .emoji{font-size:42px; margin-bottom:8px;}
+.login-card h1{font-size:22px; margin-bottom:4px;}
+.login-card p{color:var(--muted); font-size:13px; margin-bottom:20px;}
+.role-pick{display:flex; gap:10px; margin-bottom:18px;}
+.role-pick button{
+  flex:1; padding:16px 8px; border-radius:14px; border:1.5px solid var(--border);
+  background:var(--bg2); color:var(--text); font-size:14px; font-weight:600; cursor:pointer;
+}
+.role-pick button.sel{border-color:var(--accent); background:rgba(245,158,11,0.15); color:var(--accent2);}
+.role-pick button .e{display:block; font-size:24px; margin-bottom:6px;}
+input[type=password], input[type=text], input[type=number], select, input[type=date]{
+  width:100%; padding:13px 14px; border-radius:12px; border:1.5px solid var(--border);
+  background:var(--bg2); color:var(--text); font-size:16px; margin-bottom:12px;
+}
+input::placeholder{color:var(--muted);}
+.btn{
+  width:100%; padding:14px; border-radius:12px; border:none; font-size:15px;
+  font-weight:700; cursor:pointer; background:var(--accent); color:#1c1206;
+}
+.btn.secondary{background:var(--bg2); color:var(--text); border:1.5px solid var(--border);}
+.btn.green{background:var(--green); color:#06210f;}
+.btn.outline-red{background:transparent; border:1.5px solid var(--red); color:var(--red);}
+.err{color:var(--red); font-size:13px; margin:-4px 0 12px;}
+
+/* Tabs */
+.tabbar{
+  position:fixed; bottom:0; left:0; right:0; background:var(--bg2);
+  border-top:1px solid var(--border); display:flex; z-index:20;
+  padding-bottom:env(safe-area-inset-bottom);
+}
+.tabbar button{
+  flex:1; background:none; border:none; color:var(--muted); padding:10px 4px 8px;
+  font-size:11px; display:flex; flex-direction:column; align-items:center; gap:3px; cursor:pointer;
+}
+.tabbar button .e{font-size:19px;}
+.tabbar button.active{color:var(--accent2);}
+
+/* Cards & generic */
+.card{
+  background:var(--card); border:1px solid var(--border); border-radius:14px;
+  padding:16px; margin-bottom:14px;
+}
+.row{display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;}
+.row:last-child{margin-bottom:0;}
+.row .lbl{color:var(--muted); font-size:13px;}
+.row .val{font-weight:700; font-size:14px;}
+label{display:block; font-size:12.5px; color:var(--muted); margin-bottom:6px; margin-top:10px;}
+.grid2{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
+.section-title{font-size:13px; color:var(--accent2); font-weight:700; margin:18px 0 8px; text-transform:uppercase; letter-spacing:.5px;}
+.stat-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px;}
+.stat{background:var(--card); border:1px solid var(--border); border-radius:14px; padding:14px;}
+.stat .n{font-size:20px; font-weight:800;}
+.stat .l{font-size:11.5px; color:var(--muted); margin-top:2px;}
+.badge{padding:3px 9px; border-radius:20px; font-size:11px; font-weight:700;}
+.badge.paid{background:rgba(34,197,94,.18); color:var(--green);}
+.badge.unpaid{background:rgba(239,68,68,.18); color:var(--red);}
+.badge.leave{background:rgba(148,163,184,.18); color:var(--muted);}
+.history-item{
+  background:var(--card); border:1px solid var(--border); border-radius:14px;
+  padding:14px; margin-bottom:10px; cursor:pointer;
+}
+.history-item .top{display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;}
+.history-item .date{font-weight:700; font-size:14px;}
+.history-item .sub{display:flex; flex-wrap:wrap; gap:10px; font-size:12px; color:var(--muted);}
+.fab{
+  position:fixed; bottom:80px; right:18px; background:var(--accent); color:#1c1206;
+  width:54px; height:54px; border-radius:50%; border:none; font-size:26px; font-weight:700;
+  box-shadow:0 6px 16px rgba(0,0,0,.4); z-index:15; cursor:pointer;
+}
+.toast{
+  position:fixed; bottom:90px; left:50%; transform:translateX(-50%); background:var(--green);
+  color:#06210f; padding:10px 18px; border-radius:30px; font-size:13px; font-weight:700;
+  z-index:100; opacity:0; transition:opacity .3s; pointer-events:none;
+}
+.toast.show{opacity:1;}
+.pay-split{display:flex; gap:8px;}
+.muted-small{font-size:11.5px; color:var(--muted); margin-top:-6px; margin-bottom:10px;}
+.empty{text-align:center; color:var(--muted); padding:40px 10px; font-size:13px;}
+.modal-bg{
+  position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:50; display:none;
+  align-items:flex-end; justify-content:center;
+}
+.modal-bg.show{display:flex;}
+.modal{
+  background:var(--bg2); border-radius:18px 18px 0 0; padding:20px; width:100%; max-width:600px;
+  max-height:85vh; overflow-y:auto;
+}
+.modal-handle{width:40px; height:4px; background:var(--border); border-radius:4px; margin:0 auto 14px;}
+.divider{height:1px; background:var(--border); margin:14px 0;}
+.profit-pos{color:var(--green);} .profit-neg{color:var(--red);}
+</style>
+</head>
+<body>
+
+<!-- ============ LOGIN SCREEN ============ -->
+<div id="loginScreen" class="screen active">
+  <div class="login-wrap">
+    <div class="login-card">
+      <div class="emoji">🚖</div>
+      <h1 id="t_appname">வாடகை டாக்ஸி கணக்கு</h1>
+      <p id="t_tagline">Taxi Revenue & Payout Tracker</p>
+      <div class="role-pick">
+        <button id="roleOwnerBtn" class="sel" onclick="selectRole('owner')">
+          <span class="e">👤</span><span id="t_owner">Owner</span>
+        </button>
+        <button id="roleDriverBtn" onclick="selectRole('driver')">
+          <span class="e">🚗</span><span id="t_driver">Driver</span>
+        </button>
+      </div>
+      <input type="password" id="pinInput" placeholder="Enter PIN" inputmode="numeric" maxlength="6">
+      <div class="err" id="loginErr" style="display:none;"></div>
+      <button class="btn" onclick="doLogin()" id="t_login">Login</button>
+      <div class="lang-toggle" style="justify-content:center; margin-top:18px;">
+        <button id="langTaBtn" onclick="setLang('ta')">தமிழ்</button>
+        <button id="langEnBtn" class="on" onclick="setLang('en')">English</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ MAIN APP ============ -->
+<div id="mainApp" style="display:none;">
+  <div class="app-header">
+    <div class="title">
+      <span id="headerTitle">Dashboard</span>
+      <small id="headerSub"></small>
+    </div>
+    <div style="display:flex; gap:8px; align-items:center;">
+      <div class="lang-toggle">
+        <button id="langTaBtn2" onclick="setLang('ta')">த</button>
+        <button id="langEnBtn2" class="on" onclick="setLang('en')">EN</button>
+      </div>
+      <button class="icon-btn" onclick="logout()">⎋</button>
+    </div>
+  </div>
+
+  <!-- DRIVER: Daily Entry -->
+  <div id="screen_entry" class="screen">
+    <div class="card">
+      <label id="t_date">Date</label>
+      <input type="date" id="entDate">
+
+      <div class="row" style="margin-top:6px;">
+        <span id="t_leave" class="lbl">Mark today as Leave</span>
+        <input type="checkbox" id="leaveToggle" onchange="toggleLeaveMode()" style="width:20px;height:20px;">
+      </div>
+    </div>
+
+    <div id="entryFields">
+      <div class="card">
+        <div class="section-title" id="t_kmsec">Kilometers</div>
+        <div class="grid2">
+          <div><label id="t_startkm">Start KM</label><input type="number" id="startKm" placeholder="0"></div>
+          <div><label id="t_endkm">End KM</label><input type="number" id="endKm" placeholder="0"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="section-title" id="t_revsec">Revenue</div>
+        <label id="t_trip">Trip Payment (Cash collected)</label>
+        <input type="number" id="tripPayment" placeholder="0">
+        <label id="t_online">Online / RedTaxi Credit Payment</label>
+        <input type="number" id="onlinePayment" placeholder="0">
+        <label id="t_discount">Discount Given</label>
+        <input type="number" id="discount" placeholder="0">
+      </div>
+
+      <div class="card">
+        <div class="section-title" id="t_expsec">Expenses</div>
+        <label id="t_fuel">Fuel Amount</label>
+        <input type="number" id="fuelAmount" placeholder="0">
+        <label id="t_fuelmode">Fuel Paid Via</label>
+        <select id="fuelMode">
+          <option value="card" id="t_card">Fuel Card</option>
+          <option value="cash" id="t_cash">Cash (by driver)</option>
+        </select>
+        <div class="grid2">
+          <div><label id="t_parking">Parking (cash)</label><input type="number" id="parking" placeholder="0"></div>
+          <div><label id="t_toll">Toll (cash)</label><input type="number" id="toll" placeholder="0"></div>
+        </div>
+      </div>
+
+      <div class="card" id="liveCalcCard">
+        <div class="section-title" id="t_calcsec">Auto Calculated</div>
+        <div class="row"><span class="lbl" id="t_totalrev">Total Revenue</span><span class="val" id="calcRevenue">₹0</span></div>
+        <div class="row"><span class="lbl" id="t_salary30">Driver Salary (30%)</span><span class="val" id="calcSalary">₹0</span></div>
+        <div class="row"><span class="lbl" id="t_deduct">Less: Cash Fuel+Parking+Toll</span><span class="val" id="calcDeduct">₹0</span></div>
+        <div class="divider"></div>
+        <div class="row"><span class="lbl" id="t_netsalary">Net Driver Takes</span><span class="val" id="calcNetSalary">₹0</span></div>
+        <div class="row"><span class="lbl" id="t_owneramt">Owner Amount</span><span class="val" style="color:var(--accent2); font-size:17px;" id="calcOwnerAmt">₹0</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-title" id="t_paysec">Owner Payment Status</div>
+      <select id="payStatus" onchange="togglePaySplit()">
+        <option value="unpaid" id="t_unpaid">Unpaid</option>
+        <option value="paid" id="t_paid">Paid</option>
+      </select>
+      <div id="paySplitFields" style="display:none;">
+        <div class="pay-split">
+          <div style="flex:1;"><label id="t_cashpaid">Cash Paid</label><input type="number" id="cashPaid" placeholder="0"></div>
+          <div style="flex:1;"><label id="t_upipaid">UPI Paid</label><input type="number" id="upiPaid" placeholder="0"></div>
+        </div>
+      </div>
+    </div>
+
+    <button class="btn" onclick="saveEntry()" id="t_saveentry" style="margin-bottom:20px;">Save Entry</button>
+  </div>
+
+  <!-- PAYOUT DETAILS TAB -->
+  <div id="screen_payout" class="screen">
+    <div class="card">
+      <div class="row">
+        <span class="lbl" id="t_outstanding">Total Outstanding (Unpaid)</span>
+        <span class="val" style="color:var(--red); font-size:16px;" id="outstandingAmt">₹0</span>
+      </div>
+    </div>
+    <div id="payoutList"></div>
+  </div>
+
+  <!-- MAINTENANCE TAB -->
+  <div id="screen_maint" class="screen">
+    <div class="card">
+      <label id="t_monthpick">Month</label>
+      <input type="month" id="maintMonth" onchange="loadMaintenance()">
+    </div>
+    <div class="card">
+      <div class="grid2">
+        <div><label>EMI</label><input type="number" id="m_emi" placeholder="0"></div>
+        <div><label id="t_insurance">Insurance</label><input type="number" id="m_insurance" placeholder="0"></div>
+        <div><label id="t_tyre">Tyre Cost</label><input type="number" id="m_tyre" placeholder="0"></div>
+        <div><label id="t_redcomm">RedTaxi Commission</label><input type="number" id="m_redtaxi" placeholder="0"></div>
+        <div><label id="t_maintbudget">Maintenance (Budget)</label><input type="number" id="m_budget" placeholder="0"></div>
+        <div><label id="t_maintactual">Actual Maintenance</label><input type="number" id="m_actual" placeholder="0"></div>
+        <div><label id="t_others">Others</label><input type="number" id="m_others" placeholder="0"></div>
+      </div>
+      <label id="t_notes">Notes</label>
+      <input type="text" id="m_notes" placeholder="e.g. tyre puncture, service center">
+      <button class="btn" style="margin-top:6px;" onclick="saveMaintenance()" id="t_savemaint">Save Maintenance</button>
+    </div>
+    <div class="muted-small" id="t_commhint">RedTaxi settles commission 3x/month: 1–10 (paid 13th), 11–20 (paid 23rd), 21–end (paid 3rd next month). Enter the total commission for the month here.</div>
+  </div>
+
+  <!-- DASHBOARD TAB -->
+  <div id="screen_dash" class="screen">
+    <div class="section-title" id="t_today">Today</div>
+    <div class="stat-grid">
+      <div class="stat"><div class="n" id="d_todayRev">₹0</div><div class="l" id="t_revenue">Revenue</div></div>
+      <div class="stat"><div class="n" id="d_todayFuel">₹0</div><div class="l" id="t_fuel">Fuel</div></div>
+      <div class="stat"><div class="n" id="d_todaySalary">₹0</div><div class="l" id="t_salary">Driver Salary</div></div>
+      <div class="stat"><div class="n" id="d_todayOwner">₹0</div><div class="l" id="t_owneramount">Owner Amount</div></div>
+    </div>
+    <div class="card" style="margin-bottom:18px;">
+      <div class="row"><span class="lbl" id="t_status">Status</span><span id="d_todayStatus">—</span></div>
+    </div>
+
+    <div class="section-title" id="t_thismonth">This Month</div>
+    <div class="stat-grid">
+      <div class="stat"><div class="n" id="d_mRev">₹0</div><div class="l" id="t_totalrevenue">Total Revenue</div></div>
+      <div class="stat"><div class="n" id="d_mKm">0</div><div class="l" id="t_kmdriven">KM Driven</div></div>
+      <div class="stat"><div class="n" id="d_mFuel">₹0</div><div class="l" id="t_fuel">Fuel</div></div>
+      <div class="stat"><div class="n" id="d_mSalary">₹0</div><div class="l" id="t_salary">Driver Salary</div></div>
+      <div class="stat"><div class="n" id="d_mComm">₹0</div><div class="l" id="t_redcomm">RedTaxi Commission</div></div>
+      <div class="stat"><div class="n" id="d_mFixed">₹0</div><div class="l" id="t_fixedcosts">EMI+Ins+Tyre+Maint+Others</div></div>
+    </div>
+    <div class="card">
+      <div class="row"><span class="lbl" id="t_profit">Profit</span><span class="val" id="d_mProfit" style="font-size:17px;">₹0</span></div>
+      <div class="divider"></div>
+      <div class="row"><span class="lbl" id="t_paidtotal">Owner Amount Paid</span><span class="val" id="d_mPaid">₹0</span></div>
+      <div class="row"><span class="lbl" id="t_paidcash">— Cash</span><span class="val" id="d_mPaidCash">₹0</span></div>
+      <div class="row"><span class="lbl" id="t_paidupi">— UPI</span><span class="val" id="d_mPaidUpi">₹0</span></div>
+      <div class="divider"></div>
+      <div class="row"><span class="lbl" id="t_unpaidtotal">Unpaid (Outstanding)</span><span class="val" id="d_mUnpaid" style="color:var(--red);">₹0</span></div>
+    </div>
+  </div>
+
+  <div class="tabbar" id="tabbar"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- Edit modal -->
+<div class="modal-bg" id="editModalBg" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div id="editModalContent"></div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
