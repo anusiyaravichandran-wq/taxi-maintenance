@@ -93,6 +93,7 @@ async function doLogin(){
   const errEl = document.getElementById("loginErr");
   errEl.style.display="none";
   try{
+    if(!auth.currentUser){ await auth.signInAnonymously(); }
     const settingsDoc = await db.collection("settings").doc("pins").get();
     const pins = settingsDoc.exists ? settingsDoc.data() : DEFAULT_PINS;
     const correct = pins[currentRole] || DEFAULT_PINS[currentRole];
@@ -101,7 +102,6 @@ async function doLogin(){
       errEl.style.display="block";
       return;
     }
-    if(!auth.currentUser){ await auth.signInAnonymously(); }
     currentUser = currentRole;
     localStorage.setItem("taxiapp_role", currentRole);
     enterApp();
