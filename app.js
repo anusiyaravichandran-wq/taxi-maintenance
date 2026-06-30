@@ -51,6 +51,7 @@ const T = {
     share:"Share", shareReceiptTitle:"Daily Payout", shareFailed:"Couldn't generate image", shareFallback:"Image downloaded — attach it on WhatsApp",
     srTripRev:"Trip + Online", srOnline:"Online/Credit (settled separately)", srFuelCash:"Fuel (Cash)", srParking:"Parking",
     srOtherExp:"Other Expenses", srTollCollected:"Toll Collected", srSalary:"Driver Salary (30%)",
+    srHandover:"Handed Over To Owner",
   },
   ta: {
     appname:"டாக்ஸி கணக்கு", tagline:"வருமானம் & கொடுப்பனவு கணக்கு", owner:"உரிமையாளர்", driver:"டிரைவர்", login:"உள்நுழைய",
@@ -80,6 +81,7 @@ const T = {
     share:"பகிர்", shareReceiptTitle:"தினசரி கொடுப்பனவு", shareFailed:"படம் உருவாக்க முடியவில்லை", shareFallback:"படம் டவுன்லோட் ஆனது — WhatsApp இல் இணைக்கவும்",
     srTripRev:"டிரிப் + ஆன்லைன்", srOnline:"ஆன்லைன்/கிரெடிட் (தனியாக தீர்வு)", srFuelCash:"எரிபொருள் (கேஷ்)", srParking:"பார்க்கிங்",
     srOtherExp:"மற்ற செலவுகள்", srTollCollected:"வசூலித்த டோல்", srSalary:"டிரைவர் சம்பளம் (30%)",
+    srHandover:"உரிமையாளரிடம் ஒப்படைத்தது",
   }
 };
 function tr(key){ return (T[currentLang] && T[currentLang][key]) || T.en[key] || key; }
@@ -487,6 +489,11 @@ function buildShareReceipt(d, date){
   const expTotal = d.otherExpTotal!==undefined ? d.otherExpTotal : (Array.isArray(d.otherExpenses) ? d.otherExpenses.reduce((s,e)=>s+(e.amount||0),0) : 0);
   const statusBg = d.payStatus==="paid" ? "background:#dcfce7;color:#16a34a;" : "background:#fee2e2;color:#dc2626;";
   const statusText = d.payStatus==="paid" ? tr("paid") : tr("unpaid");
+  const cashPaid = d.cashPaid||0, upiPaid = d.upiPaid||0;
+  const handoverRows = d.payStatus==="paid"
+    ? `${cashPaid>0?`<div class="sr-row"><span>${tr("cashpaid")}</span><span>${fmt(cashPaid)}</span></div>`:""}
+       ${upiPaid>0?`<div class="sr-row"><span>${tr("upipaid")}</span><span>${fmt(upiPaid)}</span></div>`:""}`
+    : "";
   const node = document.getElementById("shareReceipt");
   node.innerHTML = `
     <div class="sr-head">
@@ -502,6 +509,7 @@ function buildShareReceipt(d, date){
     <div class="sr-row"><span>${tr("srTollCollected")}</span><span>+${fmt(d.tollCollected)}</span></div>
     <div class="sr-final"><span>${tr("owneramt")}</span><span>${fmt(d.ownerAmount)}</span></div>
     <div class="sr-status" style="${statusBg}">${statusText}</div>
+    ${handoverRows ? `<div class="sr-handover-title">${tr("srHandover")}</div>${handoverRows}` : ""}
   `;
 }
 async function shareEntry(date){
