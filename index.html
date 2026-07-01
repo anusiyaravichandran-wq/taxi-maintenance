@@ -255,21 +255,11 @@ label{display:block; font-size:12.5px; color:var(--muted); margin-bottom:6px; ma
 
     <div id="entryFields">
       <div class="card">
-        <div class="section-title" id="t_kmsec">Kilometers</div>
-        <div class="grid2">
-          <div><label id="t_startkm">Start KM</label><input type="number" id="startKm" placeholder="0"></div>
-          <div><label id="t_endkm">End KM</label><input type="number" id="endKm" placeholder="0"></div>
-        </div>
-      </div>
-
-      <div class="card">
         <div class="section-title" id="t_revsec">Revenue</div>
-        <label id="t_trip">Trip Payment (Cash collected)</label>
+        <label id="t_trip">Trip Payment (Total Fare, as per bill)</label>
         <input type="number" id="tripPayment" placeholder="0">
-        <label id="t_online">Online / RedTaxi Credit Payment</label>
+        <label id="t_online">— of which, Online / RedTaxi Credit</label>
         <input type="number" id="onlinePayment" placeholder="0">
-        <label id="t_discount">Discount Given</label>
-        <input type="number" id="discount" placeholder="0">
         <label id="t_tollbill">Toll Charges (as per bill)</label>
         <input type="number" id="tollCharge" placeholder="0">
         <div class="muted-small" id="tollGstReadout">Incl. GST 5%: ₹0</div>
@@ -341,6 +331,13 @@ label{display:block; font-size:12.5px; color:var(--muted); margin-bottom:6px; ma
       <input type="month" id="maintMonth" onchange="loadMaintenance()">
     </div>
     <div class="card">
+      <div class="section-title" id="t_kmsec">Kilometers</div>
+      <div class="grid2">
+        <div><label id="t_startkm">Start KM</label><input type="number" id="m_startKm" placeholder="0"></div>
+        <div><label id="t_endkm">End KM</label><input type="number" id="m_endKm" placeholder="0"></div>
+      </div>
+    </div>
+    <div class="card">
       <div class="grid2">
         <div><label>EMI</label><input type="number" id="m_emi" placeholder="0"></div>
         <div><label id="t_insurance">Insurance</label><input type="number" id="m_insurance" placeholder="0"></div>
@@ -356,6 +353,7 @@ label{display:block; font-size:12.5px; color:var(--muted); margin-bottom:6px; ma
     </div>
     <div class="muted-small" id="t_commhint">RedTaxi settles commission 3x/month: 1–10 (paid 13th), 11–20 (paid 23rd), 21–end (paid 3rd next month). Enter the total commission for the month here.</div>
   </div>
+
 
   <!-- DASHBOARD TAB -->
   <div id="screen_dash" class="screen">
