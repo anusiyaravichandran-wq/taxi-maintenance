@@ -27,7 +27,7 @@ const T = {
   en: {
     appname:"Taxi Tracker", tagline:"Revenue & Payout Tracker", owner:"Owner", driver:"Driver", login:"Login",
     date:"Date", leave:"Mark today as Leave", kmsec:"Kilometers", startkm:"Start KM", endkm:"End KM",
-    revsec:"Revenue", trip:"Trip Payment (Cash collected)", online:"Online / RedTaxi Credit Payment", discount:"Discount Given",
+    revsec:"Revenue", trip:"Trip Payment (Total Fare, as per bill)", online:"— of which, Online / RedTaxi Credit",
     tollbill:"Toll in Bill (incl. GST)", tollbillhint:"If the customer's bill already includes a toll charge line, enter that amount (toll + its GST) here — it's excluded only when calculating driver salary.",
     expsec:"Expenses", fuel:"Fuel", fuelcash:"Fuel (Cash)", fuelcard:"Fuel (Card)",
     parking:"Parking (cash)", tollcollected:"Toll Collected (FASTag)",
@@ -50,7 +50,7 @@ const T = {
     splitMismatch:"Cash + UPI must equal Owner Amount", markPaid:"Mark Paid", markUnpaid:"Mark Unpaid", edit:"Edit",
     leaveTag:"Leave Day", noEntries:"No entries yet", delete:"Delete", confirmDelete:"Delete this entry?",
     share:"Share", shareReceiptTitle:"Daily Payout", shareFailed:"Couldn't generate image", shareFallback:"Image downloaded — attach it on WhatsApp",
-    srTripRev:"Trip + Online", srOnline:"Online/Credit (settled separately)", srFuelCash:"Fuel (Cash)", srParking:"Parking",
+    srTripRev:"Trip Total (Fare)", srOnline:"Online/Credit (settled separately)", srFuelCash:"Fuel (Cash)", srParking:"Parking",
     srOtherExp:"Other Expenses", srTollCollected:"Toll Collected", srSalary:"Driver Salary (30%)",
     srHandover:"Handed Over To Owner",
     reportsec:"Reports & Export", expdaily:"Daily (Range)", expmonthly:"Monthly",
@@ -60,7 +60,7 @@ const T = {
   ta: {
     appname:"டாக்ஸி கணக்கு", tagline:"வருமானம் & கொடுப்பனவு கணக்கு", owner:"உரிமையாளர்", driver:"டிரைவர்", login:"உள்நுழைய",
     date:"தேதி", leave:"இன்று லீவு", kmsec:"கிலோமீட்டர்", startkm:"தொடக்க KM", endkm:"முடிவு KM",
-    revsec:"வருமானம்", trip:"டிரிப் பணம் (கேஷ்)", online:"ஆன்லைன் / RedTaxi கிரெடிட்", discount:"தள்ளுபடி",
+    revsec:"வருமானம்", trip:"டிரிப் பணம் (மொத்த கட்டணம், பில் படி)", online:"— இதில், ஆன்லைன் / RedTaxi கிரெடிட்",
     tollbill:"பில்லில் டோல் (GST உடன்)", tollbillhint:"வாடிக்கையாளர் பில்லில் ஏற்கனவே டோல் தொகை சேர்க்கப்பட்டிருந்தால், அந்த தொகையை (டோல் + அதன் GST) இங்கே உள்ளிடவும் — இது டிரைவர் சம்பளம் கணக்கிடும்போது மட்டும் கழிக்கப்படும்.",
     expsec:"செலவுகள்", fuel:"எரிபொருள்", fuelcash:"எரிபொருள் (கேஷ்)", fuelcard:"எரிபொருள் (கார்டு)",
     parking:"பார்க்கிங் (கேஷ்)", tollcollected:"வசூலித்த டோல் (FASTag)",
@@ -83,7 +83,7 @@ const T = {
     splitMismatch:"கேஷ் + UPI = உரிமையாளர் தொகைக்கு சமமாக இருக்க வேண்டும்", markPaid:"செலுத்தியதாக குறி", markUnpaid:"செலுத்தாததாக குறி", edit:"திருத்து",
     leaveTag:"லீவு நாள்", noEntries:"உள்ளீடுகள் இல்லை", delete:"நீக்கு", confirmDelete:"இந்த உள்ளீட்டை நீக்கவா?",
     share:"பகிர்", shareReceiptTitle:"தினசரி கொடுப்பனவு", shareFailed:"படம் உருவாக்க முடியவில்லை", shareFallback:"படம் டவுன்லோட் ஆனது — WhatsApp இல் இணைக்கவும்",
-    srTripRev:"டிரிப் + ஆன்லைன்", srOnline:"ஆன்லைன்/கிரெடிட் (தனியாக தீர்வு)", srFuelCash:"எரிபொருள் (கேஷ்)", srParking:"பார்க்கிங்",
+    srTripRev:"டிரிப் மொத்த கட்டணம்", srOnline:"ஆன்லைன்/கிரெடிட் (தனியாக தீர்வு)", srFuelCash:"எரிபொருள் (கேஷ்)", srParking:"பார்க்கிங்",
     srOtherExp:"மற்ற செலவுகள்", srTollCollected:"வசூலித்த டோல்", srSalary:"டிரைவர் சம்பளம் (30%)",
     srHandover:"உரிமையாளரிடம் ஒப்படைத்தது",
     reportsec:"அறிக்கை & ஏற்றுமதி", expdaily:"தினசரி (வரம்பு)", expmonthly:"மாதம் வாரியாக",
@@ -230,7 +230,7 @@ function initEntryScreen(){
   const dateInput = document.getElementById("entDate");
   if(!dateInput.value) dateInput.value = todayStr();
   dateInput.onchange = loadEntryForDate;
-  ["startKm","endKm","tripPayment","onlinePayment","discount","tollCharge","fuelCash","fuelCard","parking","tollCollected"].forEach(id=>{
+  ["tripPayment","onlinePayment","tollCharge","fuelCash","fuelCard","parking","tollCollected"].forEach(id=>{
     document.getElementById(id).oninput = recalcEntry;
   });
   loadEntryForDate();
@@ -276,7 +276,7 @@ async function loadEntryForDate(){
   const data = doc.exists ? doc.data() : null;
   document.getElementById("leaveToggle").checked = data ? !!data.leave : false;
   toggleLeaveMode();
-  ["startKm","endKm","tripPayment","onlinePayment","discount","parking","tollCollected"].forEach(id=>{
+  ["tripPayment","onlinePayment","parking","tollCollected"].forEach(id=>{
     document.getElementById(id).value = data && data[id]!==undefined ? data[id] : "";
   });
   // Toll base charge — new entries store tollCharge directly. Legacy entries only had
@@ -315,7 +315,7 @@ function toggleLeaveMode(){
 }
 function calcEntryValues(){
   const v = id=> Number(document.getElementById(id).value) || 0;
-  const trip = v("tripPayment"), online = v("onlinePayment"), discount = v("discount");
+  const trip = v("tripPayment"), online = v("onlinePayment");
   const tollCharge = v("tollCharge");
   const tollBillTotal = Math.round(tollCharge * (1+TOLL_GST_PCT) * 100) / 100;
   const fuelCash = v("fuelCash"), fuelCard = v("fuelCard");
@@ -323,13 +323,13 @@ function calcEntryValues(){
   const otherExpenses = getOtherExpenses();
   const otherExpTotal = otherExpenses.reduce((s,e)=> s + (Number(e.amount)||0), 0);
 
-  const totalRevenue = trip + online - discount;
+  const totalRevenue = trip;
   const salaryBase = Math.max(totalRevenue - tollBillTotal, 0);
   const salary = salaryBase * DRIVER_SALARY_PCT;
   const deductions = online + fuelCash + parking + otherExpTotal;
   const ownerAmount = totalRevenue - deductions - salary + tollCollected;
 
-  return {trip, online, discount, tollCharge, tollBillTotal, fuelCash, fuelCard, parking, tollCollected,
+  return {trip, online, tollCharge, tollBillTotal, fuelCash, fuelCard, parking, tollCollected,
     otherExpenses, otherExpTotal, totalRevenue, salaryBase, salary, deductions, ownerAmount};
 }
 function recalcEntry(){
@@ -373,9 +373,7 @@ async function saveEntry(){
 
   payload = {
     ...payload,
-    startKm: Number(document.getElementById("startKm").value)||0,
-    endKm: Number(document.getElementById("endKm").value)||0,
-    tripPayment: c.trip, onlinePayment: c.online, discount: c.discount,
+    tripPayment: c.trip, onlinePayment: c.online,
     tollCharge: c.tollCharge, tollBillTotal: c.tollBillTotal,
     fuelCash: c.fuelCash, fuelCard: c.fuelCard, parking: c.parking, tollCollected: c.tollCollected,
     otherExpenses: c.otherExpenses, otherExpTotal: c.otherExpTotal,
@@ -520,7 +518,7 @@ function buildShareReceipt(d, date){
       <div class="sr-app">🚖 ${tr("appname")}</div>
       <div class="sr-date">${date}</div>
     </div>
-    <div class="sr-row"><span>${tr("srTripRev")}</span><span>${fmt((d.tripPayment||0)+(d.onlinePayment||0))}</span></div>
+    <div class="sr-row"><span>${tr("srTripRev")}</span><span>${fmt(d.tripPayment||0)}</span></div>
     <div class="sr-row"><span>${tr("srOnline")}</span><span>−${fmt(d.onlinePayment)}</span></div>
     <div class="sr-row"><span>${tr("srSalary")}</span><span>−${fmt(d.driverSalary)}</span></div>
     <div class="sr-row"><span>${tr("srFuelCash")}</span><span>−${fmt(fc.cash)}</span></div>
@@ -575,6 +573,8 @@ async function loadMaintenance(){
   ["emi","insurance","tyre","redtaxi","budget","actual","others"].forEach(k=>{
     document.getElementById("m_"+k).value = d[k] !== undefined ? d[k] : "";
   });
+  document.getElementById("m_startKm").value = d.startKm !== undefined ? d.startKm : "";
+  document.getElementById("m_endKm").value = d.endKm !== undefined ? d.endKm : "";
   document.getElementById("m_notes").value = d.notes || "";
 }
 async function saveMaintenance(){
@@ -583,6 +583,8 @@ async function saveMaintenance(){
   ["emi","insurance","tyre","redtaxi","budget","actual","others"].forEach(k=>{
     payload[k] = Number(document.getElementById("m_"+k).value)||0;
   });
+  payload.startKm = Number(document.getElementById("m_startKm").value)||0;
+  payload.endKm = Number(document.getElementById("m_endKm").value)||0;
   payload.notes = document.getElementById("m_notes").value || "";
   payload.month = month;
   await maintDocRef(month).set(payload, {merge:true});
@@ -634,7 +636,7 @@ async function loadDashboardDay(date){
 async function loadDashboardMonth(month){
   const snap = await db.collection("vehicles").doc(CAR_ID).collection("entries")
     .where("date",">=", month+"-01").where("date","<=", month+"-31").get();
-  let mRev=0, mFuel=0, mSalary=0, mPaid=0, mPaidCash=0, mPaidUpi=0, mUnpaid=0, kmTotal=0;
+  let mRev=0, mFuel=0, mSalary=0, mPaid=0, mPaidCash=0, mPaidUpi=0, mUnpaid=0;
   snap.forEach(doc=>{
     const d = doc.data();
     if(d.leave) return;
@@ -642,7 +644,6 @@ async function loadDashboardMonth(month){
     mRev += d.totalRevenue||0;
     mFuel += fc.cash + fc.card;
     mSalary += d.driverSalary||0;
-    kmTotal += Math.max((d.endKm||0)-(d.startKm||0), 0);
     if(d.payStatus==="paid"){
       mPaid += (d.cashPaid||0)+(d.upiPaid||0);
       mPaidCash += d.cashPaid||0;
@@ -656,6 +657,7 @@ async function loadDashboardMonth(month){
   const md = maintDoc.exists ? maintDoc.data() : {};
   const comm = md.redtaxi||0;
   const fixedCosts = (md.emi||0)+(md.insurance||0)+(md.tyre||0)+(md.actual||0)+(md.others||0);
+  const kmTotal = Math.max((md.endKm||0)-(md.startKm||0), 0);
   const profit = mRev - mSalary - mFuel - comm - fixedCosts;
 
   document.getElementById("d_mRev").textContent = fmt(mRev);
