@@ -181,6 +181,20 @@ label{display:block; font-size:12.5px; color:var(--muted); margin-bottom:6px; ma
 #shareReceipt .sr-final span:last-child{font-size:22px; font-weight:800; color:#16a34a;}
 #shareReceipt .sr-status{text-align:center; margin-top:10px; font-size:12px; font-weight:700; padding:5px; border-radius:8px;}
 #shareReceipt .sr-handover-title{font-size:11px; font-weight:700; color:#6b7280; text-transform:uppercase; letter-spacing:.5px; margin-top:14px; margin-bottom:4px;}
+
+/* Dashboard picker rows */
+.dash-head-row{display:flex; justify-content:space-between; align-items:center; margin:18px 0 8px;}
+.dash-head-row input[type=date], .dash-head-row input[type=month]{
+  width:auto; padding:8px 10px; font-size:13px; margin-bottom:0;
+}
+
+/* Export toggle */
+.export-toggle{display:flex; gap:8px; margin-bottom:14px;}
+.export-toggle button{
+  flex:1; padding:10px; border-radius:12px; border:1.5px solid var(--border);
+  background:var(--bg2); color:var(--muted); font-size:13px; font-weight:700; cursor:pointer;
+}
+.export-toggle button.on{border-color:var(--accent); background:rgba(245,158,11,0.15); color:var(--accent2);}
 </style>
 </head>
 <body>
@@ -256,9 +270,10 @@ label{display:block; font-size:12.5px; color:var(--muted); margin-bottom:6px; ma
         <input type="number" id="onlinePayment" placeholder="0">
         <label id="t_discount">Discount Given</label>
         <input type="number" id="discount" placeholder="0">
-        <label id="t_tollbill">Toll in Bill (incl. GST)</label>
-        <input type="number" id="tollBill" placeholder="0">
-        <div class="muted-small" id="t_tollbillhint">If the customer's bill already includes a toll charge line, enter that amount (toll + its GST) here — it's excluded only when calculating driver salary.</div>
+        <label id="t_tollbill">Toll Charges (as per bill)</label>
+        <input type="number" id="tollCharge" placeholder="0">
+        <div class="muted-small" id="tollGstReadout">Incl. GST 5%: ₹0</div>
+        <div class="muted-small" id="t_tollbillhint">Enter the base Toll Charges line from the customer's bill (not the GST line) — the app adds 5% GST automatically and excludes the total only when calculating driver salary.</div>
       </div>
 
       <div class="card">
@@ -344,7 +359,10 @@ label{display:block; font-size:12.5px; color:var(--muted); margin-bottom:6px; ma
 
   <!-- DASHBOARD TAB -->
   <div id="screen_dash" class="screen">
-    <div class="section-title" id="t_today">Today</div>
+    <div class="dash-head-row">
+      <div class="section-title" id="t_today" style="margin:0;">Today</div>
+      <input type="date" id="dashDayPicker" style="width:auto; margin:0;">
+    </div>
     <div class="stat-grid">
       <div class="stat"><div class="n" id="d_todayRev">₹0</div><div class="l" id="t_revenue">Revenue</div></div>
       <div class="stat"><div class="n" id="d_todayFuel">₹0</div><div class="l" id="t_fuel">Fuel</div></div>
@@ -355,7 +373,10 @@ label{display:block; font-size:12.5px; color:var(--muted); margin-bottom:6px; ma
       <div class="row"><span class="lbl" id="t_status">Status</span><span id="d_todayStatus">—</span></div>
     </div>
 
-    <div class="section-title" id="t_thismonth">This Month</div>
+    <div class="dash-head-row">
+      <div class="section-title" id="t_thismonth" style="margin:0;">This Month</div>
+      <input type="month" id="dashMonthPicker" style="width:auto; margin:0;">
+    </div>
     <div class="stat-grid">
       <div class="stat"><div class="n" id="d_mRev">₹0</div><div class="l" id="t_totalrevenue">Total Revenue</div></div>
       <div class="stat"><div class="n" id="d_mKm">0</div><div class="l" id="t_kmdriven">KM Driven</div></div>
@@ -364,7 +385,7 @@ label{display:block; font-size:12.5px; color:var(--muted); margin-bottom:6px; ma
       <div class="stat"><div class="n" id="d_mComm">₹0</div><div class="l" id="t_redcomm">RedTaxi Commission</div></div>
       <div class="stat"><div class="n" id="d_mFixed">₹0</div><div class="l" id="t_fixedcosts">EMI+Ins+Tyre+Maint+Others</div></div>
     </div>
-    <div class="card">
+    <div class="card" style="margin-bottom:18px;">
       <div class="row"><span class="lbl" id="t_profit">Profit</span><span class="val" id="d_mProfit" style="font-size:17px;">₹0</span></div>
       <div class="divider"></div>
       <div class="row"><span class="lbl" id="t_paidtotal">Owner Amount Paid</span><span class="val" id="d_mPaid">₹0</span></div>
@@ -372,6 +393,30 @@ label{display:block; font-size:12.5px; color:var(--muted); margin-bottom:6px; ma
       <div class="row"><span class="lbl" id="t_paidupi">— UPI</span><span class="val" id="d_mPaidUpi">₹0</span></div>
       <div class="divider"></div>
       <div class="row"><span class="lbl" id="t_unpaidtotal">Unpaid (Outstanding)</span><span class="val" id="d_mUnpaid" style="color:var(--red);">₹0</span></div>
+    </div>
+
+    <div class="card" style="margin-bottom:24px;">
+      <div class="section-title" id="t_reportsec">Reports &amp; Export</div>
+      <div class="export-toggle">
+        <button type="button" class="on" id="expModeDaily" onclick="setExportMode('daily')"><span id="t_expdaily">Daily (Range)</span></button>
+        <button type="button" id="expModeMonthly" onclick="setExportMode('monthly')"><span id="t_expmonthly">Monthly</span></button>
+      </div>
+
+      <div id="exportDailyFields">
+        <div class="grid2">
+          <div><label id="t_startdate">Start Date</label><input type="date" id="expStartDate"></div>
+          <div><label id="t_enddate">End Date</label><input type="date" id="expEndDate"></div>
+        </div>
+      </div>
+      <div id="exportMonthlyFields" style="display:none;">
+        <label id="t_reportmonth">Month</label>
+        <input type="month" id="expMonth">
+      </div>
+
+      <div class="grid2" style="margin-top:6px;">
+        <button type="button" class="btn secondary" onclick="exportReport('pdf')">📄 <span id="t_exportpdf">Export PDF</span></button>
+        <button type="button" class="btn secondary" onclick="exportReport('excel')">📊 <span id="t_exportexcel">Export Excel</span></button>
+      </div>
     </div>
   </div>
 
@@ -392,6 +437,9 @@ label{display:block; font-size:12.5px; color:var(--muted); margin-bottom:6px; ma
 <div id="shareReceipt"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
