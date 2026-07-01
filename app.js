@@ -156,6 +156,13 @@ const TABS = {
   ]
 };
 let activeTab = "dash";
+let pendingReload = false;
+function maybeReload(){
+  if(pendingReload && activeTab !== "entry"){
+    pendingReload = false;
+    window.location.reload();
+  }
+}
 
 function buildTabbar(){
   const bar = document.getElementById("tabbar");
@@ -174,6 +181,7 @@ function switchTab(id){
   activeTab = id;
   buildTabbar();
   renderActiveScreen();
+  maybeReload();
 }
 function updateHeader(){
   const map = {dash:"headerDash", payout:"headerPayout", maint:"headerMaint", entry:"headerEntry"};
@@ -799,6 +807,42 @@ window.addEventListener("load", ()=>{
     });
   }
   if("serviceWorker" in navigator){
-    navigator.serviceWorker.register("service-worker.js").catch(()=>{});
+    navigator.serviceWorker.register("service-worker.js").then((reg)=>{
+      // If a new service worker is already waiting (found on this load), activate it now
+      if(reg.waiting) reg.waiting.postMessage("SKIP_WAITING");
+
+      // Watch for a new service worker being found (app updated on the server)
+      reg.addEventListener("updatefound", ()=>{
+        const newWorker = reg.installing;
+        if(!newWorker) return;
+        newWorker.addEventListener("statechange", ()=>{
+          if(newWorker.state === "installed" && navigator.serviceWorker.controller){
+            // New version installed and ready — activate it immediately, no driver action needed
+            newWorker.postMessage("SKIP_WAITING");
+          }
+        });
+      });
+
+      // Periodically check for updates while the app is open (e.g. every 5 min)
+      setInterval(()=> reg.update().catch(()=>{}), 5*60*1000);
+      // Also check immediately whenever the app is brought to the foreground
+      document.addEventListener("visibilitychange", ()=>{
+        if(document.visibilityState === "visible") reg.update().catch(()=>{});
+      });
+    }).catch(()=>{});
+
+    // Once the new service worker takes control, reload so the fresh app.js/index.html run.
+    // Deferred if the driver is actively on the entry form, so an unsaved entry isn't wiped —
+    // it reloads as soon as they switch tabs or the app is backgrounded instead.
+    let refreshing = false;
+    navigator.serviceWorker.addEventListener("controllerchange", ()=>{
+      if(refreshing) return;
+      refreshing = true;
+      if(activeTab === "entry"){ pendingReload = true; refreshing = false; return; }
+      window.location.reload();
+    });
+    document.addEventListener("visibilitychange", ()=>{
+      if(document.visibilityState === "hidden") maybeReload();
+    });
   }
 });
