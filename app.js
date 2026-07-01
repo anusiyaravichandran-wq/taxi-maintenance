@@ -15,6 +15,7 @@ const db = firebase.firestore();
 /* ===================== CONSTANTS ===================== */
 const CAR_ID = "car1"; // single car for now; structure supports adding more later
 const DRIVER_SALARY_PCT = 0.30;
+const TOLL_GST_PCT = 0.05;
 const DEFAULT_PINS = { owner: "1234", driver: "0000" };
 
 let currentRole = "owner";
@@ -52,6 +53,9 @@ const T = {
     srTripRev:"Trip + Online", srOnline:"Online/Credit (settled separately)", srFuelCash:"Fuel (Cash)", srParking:"Parking",
     srOtherExp:"Other Expenses", srTollCollected:"Toll Collected", srSalary:"Driver Salary (30%)",
     srHandover:"Handed Over To Owner",
+    reportsec:"Reports & Export", expdaily:"Daily (Range)", expmonthly:"Monthly",
+    startdate:"Start Date", enddate:"End Date", reportmonth:"Month",
+    exportpdf:"Export PDF", exportexcel:"Export Excel",
   },
   ta: {
     appname:"டாக்ஸி கணக்கு", tagline:"வருமானம் & கொடுப்பனவு கணக்கு", owner:"உரிமையாளர்", driver:"டிரைவர்", login:"உள்நுழைய",
@@ -82,6 +86,9 @@ const T = {
     srTripRev:"டிரிப் + ஆன்லைன்", srOnline:"ஆன்லைன்/கிரெடிட் (தனியாக தீர்வு)", srFuelCash:"எரிபொருள் (கேஷ்)", srParking:"பார்க்கிங்",
     srOtherExp:"மற்ற செலவுகள்", srTollCollected:"வசூலித்த டோல்", srSalary:"டிரைவர் சம்பளம் (30%)",
     srHandover:"உரிமையாளரிடம் ஒப்படைத்தது",
+    reportsec:"அறிக்கை & ஏற்றுமதி", expdaily:"தினசரி (வரம்பு)", expmonthly:"மாதம் வாரியாக",
+    startdate:"தொடக்க தேதி", enddate:"முடிவு தேதி", reportmonth:"மாதம்",
+    exportpdf:"PDF ஏற்றுமதி", exportexcel:"Excel ஏற்றுமதி",
   }
 };
 function tr(key){ return (T[currentLang] && T[currentLang][key]) || T.en[key] || key; }
@@ -223,7 +230,7 @@ function initEntryScreen(){
   const dateInput = document.getElementById("entDate");
   if(!dateInput.value) dateInput.value = todayStr();
   dateInput.onchange = loadEntryForDate;
-  ["startKm","endKm","tripPayment","onlinePayment","discount","tollBill","fuelCash","fuelCard","parking","tollCollected"].forEach(id=>{
+  ["startKm","endKm","tripPayment","onlinePayment","discount","tollCharge","fuelCash","fuelCard","parking","tollCollected"].forEach(id=>{
     document.getElementById(id).oninput = recalcEntry;
   });
   loadEntryForDate();
@@ -269,9 +276,18 @@ async function loadEntryForDate(){
   const data = doc.exists ? doc.data() : null;
   document.getElementById("leaveToggle").checked = data ? !!data.leave : false;
   toggleLeaveMode();
-  ["startKm","endKm","tripPayment","onlinePayment","discount","tollBill","parking","tollCollected"].forEach(id=>{
+  ["startKm","endKm","tripPayment","onlinePayment","discount","parking","tollCollected"].forEach(id=>{
     document.getElementById(id).value = data && data[id]!==undefined ? data[id] : "";
   });
+  // Toll base charge — new entries store tollCharge directly. Legacy entries only had
+  // tollBill (a manually entered GST-inclusive total) — back-calculate an approx base for editing.
+  if(data && data.tollCharge!==undefined){
+    document.getElementById("tollCharge").value = data.tollCharge;
+  } else if(data && data.tollBill!==undefined){
+    document.getElementById("tollCharge").value = Math.round((data.tollBill/(1+TOLL_GST_PCT))*100)/100;
+  } else {
+    document.getElementById("tollCharge").value = "";
+  }
   // Fuel cash/card — fall back to legacy single fuelAmount+fuelMode entries
   if(data && (data.fuelCash!==undefined || data.fuelCard!==undefined)){
     document.getElementById("fuelCash").value = data.fuelCash!==undefined ? data.fuelCash : "";
@@ -300,19 +316,20 @@ function toggleLeaveMode(){
 function calcEntryValues(){
   const v = id=> Number(document.getElementById(id).value) || 0;
   const trip = v("tripPayment"), online = v("onlinePayment"), discount = v("discount");
-  const tollBill = v("tollBill");
+  const tollCharge = v("tollCharge");
+  const tollBillTotal = Math.round(tollCharge * (1+TOLL_GST_PCT) * 100) / 100;
   const fuelCash = v("fuelCash"), fuelCard = v("fuelCard");
   const parking = v("parking"), tollCollected = v("tollCollected");
   const otherExpenses = getOtherExpenses();
   const otherExpTotal = otherExpenses.reduce((s,e)=> s + (Number(e.amount)||0), 0);
 
   const totalRevenue = trip + online - discount;
-  const salaryBase = Math.max(totalRevenue - tollBill, 0);
+  const salaryBase = Math.max(totalRevenue - tollBillTotal, 0);
   const salary = salaryBase * DRIVER_SALARY_PCT;
   const deductions = online + fuelCash + parking + otherExpTotal;
   const ownerAmount = totalRevenue - deductions - salary + tollCollected;
 
-  return {trip, online, discount, tollBill, fuelCash, fuelCard, parking, tollCollected,
+  return {trip, online, discount, tollCharge, tollBillTotal, fuelCash, fuelCard, parking, tollCollected,
     otherExpenses, otherExpTotal, totalRevenue, salaryBase, salary, deductions, ownerAmount};
 }
 function recalcEntry(){
@@ -322,6 +339,8 @@ function recalcEntry(){
   document.getElementById("calcTollCollected").textContent = "+" + fmt(c.tollCollected);
   document.getElementById("calcDeduct").textContent = "−" + fmt(c.deductions);
   document.getElementById("calcOwnerAmt").textContent = fmt(c.ownerAmount);
+  const gstEl = document.getElementById("tollGstReadout");
+  if(gstEl) gstEl.textContent = `Incl. GST 5%: ₹${fmt(c.tollBillTotal)}`;
   const totalEl = document.getElementById("otherExpTotalVal");
   if(totalEl) totalEl.textContent = fmt(c.otherExpTotal);
 }
@@ -356,7 +375,8 @@ async function saveEntry(){
     ...payload,
     startKm: Number(document.getElementById("startKm").value)||0,
     endKm: Number(document.getElementById("endKm").value)||0,
-    tripPayment: c.trip, onlinePayment: c.online, discount: c.discount, tollBill: c.tollBill,
+    tripPayment: c.trip, onlinePayment: c.online, discount: c.discount,
+    tollCharge: c.tollCharge, tollBillTotal: c.tollBillTotal,
     fuelCash: c.fuelCash, fuelCard: c.fuelCard, parking: c.parking, tollCollected: c.tollCollected,
     otherExpenses: c.otherExpenses, otherExpTotal: c.otherExpTotal,
     totalRevenue: c.totalRevenue, salaryBase: c.salaryBase, driverSalary: c.salary,
@@ -443,7 +463,7 @@ async function openEditModal(date){
     <div class="row"><span class="lbl">${tr("fuelcash")}</span><span class="val">${fmt(fc.cash)}</span></div>
     <div class="row"><span class="lbl">${tr("fuelcard")}</span><span class="val">${fmt(fc.card)}</span></div>
     <div class="row"><span class="lbl">${tr("parking")}</span><span class="val">${fmt(d.parking)}</span></div>
-    <div class="row"><span class="lbl">${tr("tollbill")}</span><span class="val">${fmt(d.tollBill)}</span></div>
+    <div class="row"><span class="lbl">${tr("tollbill")}</span><span class="val">${fmt(d.tollCharge!==undefined ? d.tollCharge : (d.tollBill!==undefined ? Math.round((d.tollBill/(1+TOLL_GST_PCT))*100)/100 : 0))} (+GST = ${fmt(d.tollBillTotal!==undefined ? d.tollBillTotal : d.tollBill)})</span></div>
     <div class="row"><span class="lbl">${tr("tollcollected")}</span><span class="val">${fmt(d.tollCollected)}</span></div>
     ${expRowsHtml}
     <div class="row"><span class="lbl">${tr("otherexptotal")}</span><span class="val">${fmt(expTotal)}</span></div>
@@ -571,16 +591,34 @@ async function saveMaintenance(){
 }
 
 /* ===================== DASHBOARD ===================== */
-async function loadDashboard(){
-  const today = todayStr();
-  const month = today.slice(0,7);
+function initDashboardScreen(){
+  const dayPicker = document.getElementById("dashDayPicker");
+  const monthPicker = document.getElementById("dashMonthPicker");
+  if(!dayPicker.value) dayPicker.value = todayStr();
+  if(!monthPicker.value) monthPicker.value = todayStr().slice(0,7);
+  dayPicker.onchange = ()=> loadDashboardDay(dayPicker.value);
+  monthPicker.onchange = ()=> loadDashboardMonth(monthPicker.value);
 
-  // Today
-  const todayDoc = await entryDocRef(today).get();
+  const expStart = document.getElementById("expStartDate");
+  const expEnd = document.getElementById("expEndDate");
+  const expMonth = document.getElementById("expMonth");
+  if(!expStart.value) expStart.value = todayStr();
+  if(!expEnd.value) expEnd.value = todayStr();
+  if(!expMonth.value) expMonth.value = todayStr().slice(0,7);
+
+  loadDashboardDay(dayPicker.value);
+  loadDashboardMonth(monthPicker.value);
+}
+async function loadDashboard(){
+  initDashboardScreen();
+}
+async function loadDashboardDay(date){
+  const todayDoc = await entryDocRef(date).get();
   const td = todayDoc.exists ? todayDoc.data() : null;
   if(td && !td.leave){
+    const fc = fuelCashCard(td);
     document.getElementById("d_todayRev").textContent = fmt(td.totalRevenue);
-    document.getElementById("d_todayFuel").textContent = fmt(td.fuelAmount);
+    document.getElementById("d_todayFuel").textContent = fmt(fc.cash + fc.card);
     document.getElementById("d_todaySalary").textContent = fmt(td.driverSalary);
     document.getElementById("d_todayOwner").textContent = fmt(td.ownerAmount);
     document.getElementById("d_todayStatus").innerHTML = td.payStatus==="paid"
@@ -592,16 +630,17 @@ async function loadDashboard(){
     ["d_todayRev","d_todayFuel","d_todaySalary","d_todayOwner"].forEach(id=>document.getElementById(id).textContent=fmt(0));
     document.getElementById("d_todayStatus").innerHTML = `<span class="badge unpaid">${tr("noEntries")}</span>`;
   }
-
-  // Month aggregation
+}
+async function loadDashboardMonth(month){
   const snap = await db.collection("vehicles").doc(CAR_ID).collection("entries")
     .where("date",">=", month+"-01").where("date","<=", month+"-31").get();
   let mRev=0, mFuel=0, mSalary=0, mPaid=0, mPaidCash=0, mPaidUpi=0, mUnpaid=0, kmTotal=0;
   snap.forEach(doc=>{
     const d = doc.data();
     if(d.leave) return;
+    const fc = fuelCashCard(d);
     mRev += d.totalRevenue||0;
-    mFuel += d.fuelAmount||0;
+    mFuel += fc.cash + fc.card;
     mSalary += d.driverSalary||0;
     kmTotal += Math.max((d.endKm||0)-(d.startKm||0), 0);
     if(d.payStatus==="paid"){
@@ -632,6 +671,119 @@ async function loadDashboard(){
   document.getElementById("d_mPaidCash").textContent = fmt(mPaidCash);
   document.getElementById("d_mPaidUpi").textContent = fmt(mPaidUpi);
   document.getElementById("d_mUnpaid").textContent = fmt(mUnpaid);
+}
+
+/* ===================== REPORTS & EXPORT (PDF / Excel) ===================== */
+let exportMode = "daily";
+function setExportMode(mode){
+  exportMode = mode;
+  document.getElementById("expModeDaily").classList.toggle("on", mode==="daily");
+  document.getElementById("expModeMonthly").classList.toggle("on", mode==="monthly");
+  document.getElementById("exportDailyFields").style.display = mode==="daily" ? "block":"none";
+  document.getElementById("exportMonthlyFields").style.display = mode==="monthly" ? "block":"none";
+}
+async function fetchReportEntries(){
+  let startDate, endDate;
+  if(exportMode==="daily"){
+    startDate = document.getElementById("expStartDate").value;
+    endDate = document.getElementById("expEndDate").value;
+  } else {
+    const month = document.getElementById("expMonth").value;
+    startDate = month+"-01";
+    endDate = month+"-31";
+  }
+  if(!startDate || !endDate){ showToast(tr("fillRequired")); return null; }
+  const snap = await db.collection("vehicles").doc(CAR_ID).collection("entries")
+    .where("date",">=",startDate).where("date","<=",endDate).orderBy("date","asc").get();
+  const rows = [];
+  snap.forEach(doc=>{
+    const d = doc.data();
+    if(d.leave){
+      rows.push({date:d.date, leave:true});
+      return;
+    }
+    const fc = fuelCashCard(d);
+    const expTotal = d.otherExpTotal!==undefined ? d.otherExpTotal : (Array.isArray(d.otherExpenses)?d.otherExpenses.reduce((s,e)=>s+(e.amount||0),0):0);
+    rows.push({
+      date:d.date, leave:false,
+      revenue:d.totalRevenue||0, salary:d.driverSalary||0,
+      fuelCash:fc.cash, fuelCard:fc.card, parking:d.parking||0,
+      tollCharge: d.tollCharge!==undefined?d.tollCharge:0,
+      tollBillTotal: d.tollBillTotal!==undefined?d.tollBillTotal:(d.tollBill||0),
+      tollCollected:d.tollCollected||0, otherExp:expTotal,
+      ownerAmount:d.ownerAmount||0, payStatus:d.payStatus||"unpaid",
+      cashPaid:d.cashPaid||0, upiPaid:d.upiPaid||0,
+    });
+  });
+  return {rows, startDate, endDate};
+}
+function reportTotals(rows){
+  const t = {revenue:0,salary:0,fuelCash:0,fuelCard:0,parking:0,tollCollected:0,otherExp:0,ownerAmount:0,cashPaid:0,upiPaid:0};
+  rows.forEach(r=>{
+    if(r.leave) return;
+    t.revenue+=r.revenue; t.salary+=r.salary; t.fuelCash+=r.fuelCash; t.fuelCard+=r.fuelCard;
+    t.parking+=r.parking; t.tollCollected+=r.tollCollected; t.otherExp+=r.otherExp;
+    t.ownerAmount+=r.ownerAmount; t.cashPaid+=r.cashPaid; t.upiPaid+=r.upiPaid;
+  });
+  return t;
+}
+async function exportReport(kind){
+  const result = await fetchReportEntries();
+  if(!result) return;
+  const {rows, startDate, endDate} = result;
+  if(!rows.length){ showToast(tr("noEntries")); return; }
+  const totals = reportTotals(rows);
+  const title = exportMode==="daily" ? `${startDate} to ${endDate}` : startDate.slice(0,7);
+  if(kind==="pdf") exportReportPDF(rows, totals, title);
+  else exportReportExcel(rows, totals, title);
+}
+function exportReportPDF(rows, totals, title){
+  if(typeof window.jspdf === "undefined"){ showToast(tr("shareFailed")); return; }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({orientation:"landscape", unit:"pt"});
+  doc.setFontSize(14);
+  doc.text(`${tr("appname")} — ${tr("headerDash")} (${title})`, 30, 30);
+
+  const head = [["Date","Revenue","Salary","Fuel(Cash)","Fuel(Card)","Parking","Toll Collected","Other Exp","Owner Amt","Status","Cash Paid","UPI Paid"]];
+  const body = rows.map(r=> r.leave
+    ? [r.date, tr("leaveTag"),"","","","","","","","","",""]
+    : [r.date, r.revenue.toFixed(0), r.salary.toFixed(0), r.fuelCash.toFixed(0), r.fuelCard.toFixed(0),
+       r.parking.toFixed(0), r.tollCollected.toFixed(0), r.otherExp.toFixed(0), r.ownerAmount.toFixed(0),
+       r.payStatus, r.cashPaid.toFixed(0), r.upiPaid.toFixed(0)]
+  );
+  body.push(["TOTAL", totals.revenue.toFixed(0), totals.salary.toFixed(0), totals.fuelCash.toFixed(0),
+    totals.fuelCard.toFixed(0), totals.parking.toFixed(0), totals.tollCollected.toFixed(0),
+    totals.otherExp.toFixed(0), totals.ownerAmount.toFixed(0), "", totals.cashPaid.toFixed(0), totals.upiPaid.toFixed(0)]);
+
+  doc.autoTable({ head, body, startY: 45, styles:{fontSize:8}, headStyles:{fillColor:[245,158,11]},
+    footStyles:{fillColor:[30,41,59]}, didParseCell:(data)=>{
+      if(data.row.index === body.length-1) data.cell.styles.fontStyle = "bold";
+    }});
+  doc.save(`report-${title.replace(/\s+/g,"_")}.pdf`);
+}
+function exportReportExcel(rows, totals, title){
+  if(typeof XLSX === "undefined"){ showToast(tr("shareFailed")); return; }
+  const data = rows.map(r=> r.leave
+    ? {Date:r.date, Status:tr("leaveTag")}
+    : {
+      Date:r.date, Revenue:r.revenue, "Driver Salary":r.salary,
+      "Fuel (Cash)":r.fuelCash, "Fuel (Card)":r.fuelCard, Parking:r.parking,
+      "Toll Charge (base)":r.tollCharge, "Toll (incl. GST)":r.tollBillTotal,
+      "Toll Collected":r.tollCollected, "Other Expenses":r.otherExp,
+      "Owner Amount":r.ownerAmount, "Pay Status":r.payStatus,
+      "Cash Paid":r.cashPaid, "UPI Paid":r.upiPaid,
+    }
+  );
+  data.push({
+    Date:"TOTAL", Revenue:totals.revenue, "Driver Salary":totals.salary,
+    "Fuel (Cash)":totals.fuelCash, "Fuel (Card)":totals.fuelCard, Parking:totals.parking,
+    "Toll Collected":totals.tollCollected, "Other Expenses":totals.otherExp,
+    "Owner Amount":totals.ownerAmount, "Cash Paid":totals.cashPaid, "UPI Paid":totals.upiPaid,
+  });
+  const ws = XLSX.utils.json_to_sheet(data);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Report");
+  XLSX.writeFile(wb, `report-${title.replace(/\s+/g,"_")}.xlsx`);
 }
 
 /* ===================== INIT / SERVICE WORKER ===================== */
