@@ -1,4 +1,4 @@
-/* ===================== FIREBASE CONFIG ===================== */
+\/* ===================== FIREBASE CONFIG ===================== */
 /* TODO: Replace with your own Firebase project config (Firestore + Auth-anonymous enabled) */
 const firebaseConfig = {
   apiKey: "AIzaSyAeupI3EuaNwcII_rDexSmQR8ais_csfSw",
@@ -28,7 +28,7 @@ const T = {
     appname:"Taxi Tracker", tagline:"Revenue & Payout Tracker", owner:"Owner", driver:"Driver", login:"Login",
     date:"Date", leave:"Mark today as Leave", kmsec:"Kilometers", startkm:"Start KM", endkm:"End KM",
     revsec:"Revenue", trip:"Trip Payment (Total Fare, as per bill)", online:"— of which, Online / RedTaxi Credit",
-    tollbill:"Toll in Bill (incl. GST)", tollbillhint:"If the customer's bill already includes a toll charge line, enter that amount (toll + its GST) here — it's excluded only when calculating driver salary.",
+    tollbill:"Toll Charges (as per bill)", tollbillhint:"Enter the base Toll Charges line from the customer's bill (not the GST line) — the app adds 5% GST automatically and excludes the total only when calculating driver salary.",
     expsec:"Expenses", fuel:"Fuel", fuelcash:"Fuel (Cash)", fuelcard:"Fuel (Card)",
     parking:"Parking (cash)", tollcollected:"Toll Collected (FASTag)",
     otherexp:"Other Expenses", addexpense:"Add Expense", otherexptotal:"Other Expenses Total",
@@ -61,7 +61,7 @@ const T = {
     appname:"டாக்ஸி கணக்கு", tagline:"வருமானம் & கொடுப்பனவு கணக்கு", owner:"உரிமையாளர்", driver:"டிரைவர்", login:"உள்நுழைய",
     date:"தேதி", leave:"இன்று லீவு", kmsec:"கிலோமீட்டர்", startkm:"தொடக்க KM", endkm:"முடிவு KM",
     revsec:"வருமானம்", trip:"டிரிப் பணம் (மொத்த கட்டணம், பில் படி)", online:"— இதில், ஆன்லைன் / RedTaxi கிரெடிட்",
-    tollbill:"பில்லில் டோல் (GST உடன்)", tollbillhint:"வாடிக்கையாளர் பில்லில் ஏற்கனவே டோல் தொகை சேர்க்கப்பட்டிருந்தால், அந்த தொகையை (டோல் + அதன் GST) இங்கே உள்ளிடவும் — இது டிரைவர் சம்பளம் கணக்கிடும்போது மட்டும் கழிக்கப்படும்.",
+    tollbill:"டோல் கட்டணம் (பில் படி)", tollbillhint:"வாடிக்கையாளர் பில்லில் உள்ள அடிப்படை டோல் கட்டணத்தை மட்டும் உள்ளிடவும் (GST வரி இல்லாமல்) — ஆப் தானாக 5% GST சேர்த்து, டிரைவர் சம்பளம் கணக்கிடும்போது மட்டும் அந்த மொத்தத்தை கழிக்கும்.",
     expsec:"செலவுகள்", fuel:"எரிபொருள்", fuelcash:"எரிபொருள் (கேஷ்)", fuelcard:"எரிபொருள் (கார்டு)",
     parking:"பார்க்கிங் (கேஷ்)", tollcollected:"வசூலித்த டோல் (FASTag)",
     otherexp:"மற்ற செலவுகள்", addexpense:"செலவு சேர்க்க", otherexptotal:"மற்ற செலவுகள் மொத்தம்",
@@ -348,7 +348,7 @@ function recalcEntry(){
   document.getElementById("calcDeduct").textContent = "−" + fmt(c.deductions);
   document.getElementById("calcOwnerAmt").textContent = fmt(c.ownerAmount);
   const gstEl = document.getElementById("tollGstReadout");
-  if(gstEl) gstEl.textContent = `Incl. GST 5%: ₹${fmt(c.tollBillTotal)}`;
+  if(gstEl) gstEl.textContent = `Incl. GST 5%: ${fmt(c.tollBillTotal)}`;
   const totalEl = document.getElementById("otherExpTotalVal");
   if(totalEl) totalEl.textContent = fmt(c.otherExpTotal);
 }
