@@ -1,4 +1,4 @@
-\/* ===================== FIREBASE CONFIG ===================== */
+/* ===================== FIREBASE CONFIG ===================== */
 /* TODO: Replace with your own Firebase project config (Firestore + Auth-anonymous enabled) */
 const firebaseConfig = {
   apiKey: "AIzaSyAeupI3EuaNwcII_rDexSmQR8ais_csfSw",
