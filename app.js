@@ -21,6 +21,7 @@ const DEFAULT_PINS = { owner: "1234", driver: "0000" };
 let currentRole = "owner";
 let currentLang = localStorage.getItem("lang") || "en";
 let currentUser = null; // 'owner' | 'driver'
+let driverStartDate = null; // "YYYY-MM-DD" — driver only sees entries on/after this date
 
 /* ===================== TRANSLATIONS ===================== */
 const T = {
@@ -127,6 +128,9 @@ async function doLogin(){
       errEl.style.display="block";
       return;
     }
+    // Driver only sees entries on/after this date (set in Firestore settings/pins
+    // as "driverStartDate" whenever the driver PIN is reset for a new driver).
+    driverStartDate = (settingsDoc.exists && settingsDoc.data().driverStartDate) || null;
     currentUser = currentRole;
     localStorage.setItem("taxiapp_role", currentRole);
     enterApp();
@@ -138,6 +142,7 @@ async function doLogin(){
 function logout(){
   localStorage.removeItem("taxiapp_role");
   currentUser = null;
+  driverStartDate = null;
   document.getElementById("mainApp").style.display="none";
   document.getElementById("loginScreen").className="screen active";
   document.getElementById("pinInput").value="";
@@ -232,6 +237,10 @@ function entryDocRef(dateStr){
 function maintDocRef(monthStr){ // monthStr like 2026-06
   return db.collection("vehicles").doc(CAR_ID).collection("maintenance").doc(monthStr);
 }
+// True if this date belongs to a previous driver's tenure and should be hidden from the driver view.
+function isBeforeDriverStart(dateStr){
+  return currentUser === "driver" && driverStartDate && dateStr < driverStartDate;
+}
 
 /* ===================== DRIVER: DAILY ENTRY ===================== */
 function initEntryScreen(){
@@ -280,6 +289,20 @@ function getOtherExpenses(){
 
 async function loadEntryForDate(){
   const date = document.getElementById("entDate").value;
+  const errEl = document.getElementById("entryBlockedMsg");
+
+  // Driver can't view/edit entries from before their tenure started (previous driver's data).
+  if(isBeforeDriverStart(date)){
+    document.getElementById("entryFields").style.display = "none";
+    const tgl = document.getElementById("leaveToggle");
+    if(tgl) tgl.disabled = true;
+    if(errEl) errEl.style.display = "block";
+    return;
+  }
+  if(errEl) errEl.style.display = "none";
+  const tgl2 = document.getElementById("leaveToggle");
+  if(tgl2) tgl2.disabled = false;
+
   const doc = await entryDocRef(date).get();
   const data = doc.exists ? doc.data() : null;
   document.getElementById("leaveToggle").checked = data ? !!data.leave : false;
@@ -359,6 +382,7 @@ function togglePaySplit(){
 async function saveEntry(){
   const date = document.getElementById("entDate").value;
   if(!date){ showToast(tr("fillRequired")); return; }
+  if(isBeforeDriverStart(date)) return; // guard: driver cannot write to a previous driver's date
   const isLeave = document.getElementById("leaveToggle").checked;
   let payload = { date, leave: isLeave, updatedAt: Date.now() };
 
@@ -407,8 +431,12 @@ function fuelCashCard(d){
   return { cash:0, card:0 };
 }
 async function loadPayoutList(){
-  const snap = await db.collection("vehicles").doc(CAR_ID).collection("entries")
-    .orderBy("date","desc").limit(90).get();
+  // Driver view only sees entries from their own tenure onward; owner always sees everything.
+  let query = db.collection("vehicles").doc(CAR_ID).collection("entries");
+  if(currentUser === "driver" && driverStartDate){
+    query = query.where("date", ">=", driverStartDate);
+  }
+  const snap = await query.orderBy("date","desc").limit(90).get();
   const list = document.getElementById("payoutList");
   list.innerHTML = "";
   let outstanding = 0;
@@ -438,12 +466,15 @@ function renderPayoutItem(d){
   const div = document.createElement("div");
   div.className = "history-item";
   const statusBadge = d.payStatus==="paid" ? `<span class="badge paid">${tr("paid")}</span>` : `<span class="badge unpaid">${tr("unpaid")}</span>`;
+  // Drivers can view but not edit entries in the payout list — only the owner opens the edit modal.
+  const clickable = currentUser === "owner";
+  const onclickAttr = clickable ? `onclick="openEditModal('${d.date}')" style="cursor:pointer;"` : "";
   div.innerHTML = `
-    <div class="top" onclick="openEditModal('${d.date}')" style="cursor:pointer;">
+    <div class="top" ${onclickAttr}>
       <span class="date">${d.date}</span>
       ${statusBadge}
     </div>
-    <div class="sub" onclick="openEditModal('${d.date}')" style="cursor:pointer;">
+    <div class="sub" ${onclickAttr}>
       <span>${tr("revenue")}: ${fmt(d.totalRevenue)}</span>
       <span>${tr("salary")}: ${fmt(d.driverSalary)}</span>
       <span>${tr("owneramount")}: ${fmt(d.ownerAmount)}</span>
@@ -456,6 +487,7 @@ function renderPayoutItem(d){
 }
 function closeModal(){ document.getElementById("editModalBg").classList.remove("show"); }
 async function openEditModal(date){
+  if(currentUser !== "owner") return; // owner-only, defense in depth alongside the UI gate above
   const doc = await entryDocRef(date).get();
   if(!doc.exists) return;
   const d = doc.data();
@@ -802,7 +834,13 @@ window.addEventListener("load", ()=>{
   const savedRole = localStorage.getItem("taxiapp_role");
   if(savedRole){
     currentUser = savedRole;
-    auth.signInAnonymously().then(()=> enterApp()).catch(()=>{
+    auth.signInAnonymously().then(async ()=>{
+      if(savedRole === "driver"){
+        const settingsDoc = await db.collection("settings").doc("pins").get();
+        driverStartDate = (settingsDoc.exists && settingsDoc.data().driverStartDate) || null;
+      }
+      enterApp();
+    }).catch(()=>{
       currentUser = null;
     });
   }
