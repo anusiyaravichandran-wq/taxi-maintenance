@@ -244,13 +244,30 @@ label{display:block; font-size:12.5px; color:var(--muted); margin-bottom:6px; ma
   <!-- DRIVER: Daily Entry -->
   <div id="screen_entry" class="screen">
     <div class="card">
-      <label id="t_date">Date</label>
-      <input type="date" id="entDate">
-
-      <div class="row" style="margin-top:6px;">
-        <span id="t_leave" class="lbl">Mark today as Leave</span>
-        <input type="checkbox" id="leaveToggle" onchange="toggleLeaveMode()" style="width:20px;height:20px;">
+      <div class="export-toggle" id="entryModeToggle">
+        <button type="button" class="on" id="entryModeSingleBtn" onclick="setEntryMode('single')">Single Day</button>
+        <button type="button" id="entryModeRangeBtn" onclick="setEntryMode('range')">Date Range</button>
       </div>
+
+      <div id="singleDateFields">
+        <label id="t_date">Date</label>
+        <input type="date" id="entDate">
+
+        <div class="row" style="margin-top:6px;">
+          <span id="t_leave" class="lbl">Mark today as Leave</span>
+          <input type="checkbox" id="leaveToggle" onchange="toggleLeaveMode()" style="width:20px;height:20px;">
+        </div>
+      </div>
+
+      <div id="rangeDateFields" style="display:none;">
+        <div class="grid2">
+          <div><label>From Date</label><input type="date" id="entFromDate"></div>
+          <div><label>To Date</label><input type="date" id="entToDate"></div>
+        </div>
+        <div class="muted-small">Enter combined totals for the whole period below — e.g. total Trip Payment for all the days together.</div>
+      </div>
+
+      <div class="muted-small" id="entryBlockedMsg" style="display:none; color:var(--red);">This date is from before your start — ask the owner if you need it changed.</div>
     </div>
 
     <div id="entryFields">
@@ -310,7 +327,10 @@ label{display:block; font-size:12.5px; color:var(--muted); margin-bottom:6px; ma
       </div>
     </div>
 
-    <button class="btn" onclick="saveEntry()" id="t_saveentry" style="margin-bottom:20px;">Save Entry</button>
+    <button class="btn" onclick="saveEntry()" id="t_saveentry" style="margin-bottom:12px;">Save Entry</button>
+    <div id="payUpiWrap" style="display:none; margin-bottom:20px;">
+      <button class="btn secondary" onclick="payViaUpi()">📱 Pay via UPI</button>
+    </div>
   </div>
 
   <!-- PAYOUT DETAILS TAB -->
@@ -352,6 +372,15 @@ label{display:block; font-size:12.5px; color:var(--muted); margin-bottom:6px; ma
       <button class="btn" style="margin-top:6px;" onclick="saveMaintenance()" id="t_savemaint">Save Maintenance</button>
     </div>
     <div class="muted-small" id="t_commhint">RedTaxi settles commission 3x/month: 1–10 (paid 13th), 11–20 (paid 23rd), 21–end (paid 3rd next month). Enter the total commission for the month here.</div>
+
+    <div class="card" style="margin-top:12px; margin-bottom:24px;">
+      <div class="section-title">Payment Settings</div>
+      <label>Your UPI ID (to receive driver payouts)</label>
+      <input type="text" id="upiIdInput" placeholder="yourname@okhdfcbank">
+      <label style="margin-top:10px;">Name shown to driver</label>
+      <input type="text" id="upiPayeeNameInput" placeholder="e.g. Naveen">
+      <button class="btn" style="margin-top:10px;" onclick="saveUpiSettings()">Save UPI Details</button>
+    </div>
   </div>
 
 
