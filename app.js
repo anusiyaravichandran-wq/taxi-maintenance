@@ -22,6 +22,9 @@ let currentRole = "owner";
 let currentLang = localStorage.getItem("lang") || "en";
 let currentUser = null; // 'owner' | 'driver'
 let driverStartDate = null; // "YYYY-MM-DD" — driver only sees entries on/after this date
+let entryMode = "single"; // 'single' | 'range' — which entry form is active
+let ownerUpiId = null;
+let ownerUpiName = null;
 
 /* ===================== TRANSLATIONS ===================== */
 const T = {
@@ -131,6 +134,8 @@ async function doLogin(){
     // Driver only sees entries on/after this date (set in Firestore settings/pins
     // as "driverStartDate" whenever the driver PIN is reset for a new driver).
     driverStartDate = (settingsDoc.exists && settingsDoc.data().driverStartDate) || null;
+    ownerUpiId = (settingsDoc.exists && settingsDoc.data().upiId) || null;
+    ownerUpiName = (settingsDoc.exists && settingsDoc.data().upiPayeeName) || null;
     currentUser = currentRole;
     localStorage.setItem("taxiapp_role", currentRole);
     enterApp();
@@ -234,6 +239,16 @@ function showToast(msg){
 function entryDocRef(dateStr){
   return db.collection("vehicles").doc(CAR_ID).collection("entries").doc(dateStr);
 }
+function rangeDocRef(fromDate, toDate){
+  return db.collection("vehicles").doc(CAR_ID).collection("entries").doc(`range_${fromDate}_${toDate}`);
+}
+function entriesDocById(id){
+  return db.collection("vehicles").doc(CAR_ID).collection("entries").doc(id);
+}
+function daysBetweenInclusive(fromDate, toDate){
+  const a = new Date(fromDate+"T00:00:00"), b = new Date(toDate+"T00:00:00");
+  return Math.round((b-a)/86400000) + 1;
+}
 function maintDocRef(monthStr){ // monthStr like 2026-06
   return db.collection("vehicles").doc(CAR_ID).collection("maintenance").doc(monthStr);
 }
@@ -247,10 +262,35 @@ function initEntryScreen(){
   const dateInput = document.getElementById("entDate");
   if(!dateInput.value) dateInput.value = todayStr();
   dateInput.onchange = loadEntryForDate;
+
+  const fromInput = document.getElementById("entFromDate");
+  const toInput = document.getElementById("entToDate");
+  if(fromInput && !fromInput.value) fromInput.value = todayStr();
+  if(toInput && !toInput.value) toInput.value = todayStr();
+  if(fromInput) fromInput.onchange = loadEntryForRange;
+  if(toInput) toInput.onchange = loadEntryForRange;
+
   ["tripPayment","onlinePayment","tollCharge","fuelCash","fuelCard","parking","tollCollected"].forEach(id=>{
     document.getElementById(id).oninput = recalcEntry;
   });
-  loadEntryForDate();
+
+  setEntryMode(entryMode); // re-apply current mode's UI + reload its data
+}
+function setEntryMode(mode){
+  entryMode = mode;
+  const singleBtn = document.getElementById("entryModeSingleBtn");
+  const rangeBtn = document.getElementById("entryModeRangeBtn");
+  if(singleBtn) singleBtn.className = mode==="single" ? "on":"";
+  if(rangeBtn) rangeBtn.className = mode==="range" ? "on":"";
+  const singleFields = document.getElementById("singleDateFields");
+  const rangeFields = document.getElementById("rangeDateFields");
+  if(singleFields) singleFields.style.display = mode==="single" ? "block":"none";
+  if(rangeFields) rangeFields.style.display = mode==="range" ? "block":"none";
+  // Leave toggle only makes sense for a single day
+  const leaveRow = document.getElementById("leaveToggle");
+  if(leaveRow) leaveRow.disabled = (mode==="range");
+  if(mode==="single") loadEntryForDate();
+  else loadEntryForRange();
 }
 
 /* ----- Other Expenses (repeatable rows) ----- */
@@ -290,6 +330,7 @@ function getOtherExpenses(){
 async function loadEntryForDate(){
   const date = document.getElementById("entDate").value;
   const errEl = document.getElementById("entryBlockedMsg");
+  hidePayUpiButton();
 
   // Driver can't view/edit entries from before their tenure started (previous driver's data).
   if(isBeforeDriverStart(date)){
@@ -340,6 +381,39 @@ async function loadEntryForDate(){
   togglePaySplit();
   recalcEntry();
 }
+async function loadEntryForRange(){
+  const fromDate = document.getElementById("entFromDate").value;
+  const toDate = document.getElementById("entToDate").value;
+  const errEl = document.getElementById("entryBlockedMsg");
+  hidePayUpiButton();
+  if(!fromDate || !toDate || toDate < fromDate) return;
+
+  if(isBeforeDriverStart(fromDate)){
+    document.getElementById("entryFields").style.display = "none";
+    if(errEl) errEl.style.display = "block";
+    return;
+  }
+  document.getElementById("entryFields").style.display = "block";
+  if(errEl) errEl.style.display = "none";
+
+  const doc = await rangeDocRef(fromDate, toDate).get();
+  const data = doc.exists ? doc.data() : null;
+  ["tripPayment","onlinePayment","parking","tollCollected"].forEach(id=>{
+    document.getElementById(id).value = data && data[id]!==undefined ? data[id] : "";
+  });
+  document.getElementById("tollCharge").value = data && data.tollCharge!==undefined ? data.tollCharge : "";
+  document.getElementById("fuelCash").value = data && data.fuelCash!==undefined ? data.fuelCash : "";
+  document.getElementById("fuelCard").value = data && data.fuelCard!==undefined ? data.fuelCard : "";
+  clearExpenseRows();
+  if(data && Array.isArray(data.otherExpenses) && data.otherExpenses.length){
+    data.otherExpenses.forEach(e=> addExpenseRow(e.amount, e.desc));
+  }
+  document.getElementById("payStatus").value = (data && data.payStatus) || "unpaid";
+  document.getElementById("cashPaid").value = data && data.cashPaid!==undefined ? data.cashPaid : "";
+  document.getElementById("upiPaid").value = data && data.upiPaid!==undefined ? data.upiPaid : "";
+  togglePaySplit();
+  recalcEntry();
+}
 function toggleLeaveMode(){
   const isLeave = document.getElementById("leaveToggle").checked;
   document.getElementById("entryFields").style.display = isLeave ? "none" : "block";
@@ -380,6 +454,8 @@ function togglePaySplit(){
   document.getElementById("paySplitFields").style.display = isPaid ? "block":"none";
 }
 async function saveEntry(){
+  if(entryMode === "range") return saveRangeEntry();
+
   const date = document.getElementById("entDate").value;
   if(!date){ showToast(tr("fillRequired")); return; }
   if(isBeforeDriverStart(date)) return; // guard: driver cannot write to a previous driver's date
@@ -389,6 +465,7 @@ async function saveEntry(){
   if(isLeave){
     await entryDocRef(date).set(payload, {merge:true});
     showToast(tr("savedOk"));
+    hidePayUpiButton();
     return;
   }
 
@@ -417,6 +494,49 @@ async function saveEntry(){
   };
   await entryDocRef(date).set(payload, {merge:true});
   showToast(tr("savedOk"));
+  showPayUpiButton();
+}
+async function saveRangeEntry(){
+  const fromDate = document.getElementById("entFromDate").value;
+  const toDate = document.getElementById("entToDate").value;
+  if(!fromDate || !toDate || toDate < fromDate){ showToast(tr("fillRequired")); return; }
+  if(isBeforeDriverStart(fromDate)) return; // guard: driver cannot write before their tenure
+
+  const c = calcEntryValues(); // totals entered are for the WHOLE range, combined
+  const payStatus = document.getElementById("payStatus").value;
+  const cashPaid = Number(document.getElementById("cashPaid").value)||0;
+  const upiPaid = Number(document.getElementById("upiPaid").value)||0;
+
+  if(payStatus==="paid"){
+    if(Math.round(cashPaid+upiPaid) !== Math.round(c.ownerAmount) && (cashPaid+upiPaid) > c.ownerAmount){
+      showToast(tr("splitMismatch")); return;
+    }
+  }
+
+  const numDays = daysBetweenInclusive(fromDate, toDate);
+  const payload = {
+    isRange: true,
+    date: fromDate, endDate: toDate, numDays,
+    leave: false, updatedAt: Date.now(),
+    tripPayment: c.trip, onlinePayment: c.online,
+    tollCharge: c.tollCharge, tollBillTotal: c.tollBillTotal,
+    fuelCash: c.fuelCash, fuelCard: c.fuelCard, parking: c.parking, tollCollected: c.tollCollected,
+    otherExpenses: c.otherExpenses, otherExpTotal: c.otherExpTotal,
+    totalRevenue: c.totalRevenue, salaryBase: c.salaryBase, driverSalary: c.salary,
+    ownerAmount: c.ownerAmount, payStatus, cashPaid: payStatus==="paid"?cashPaid:0,
+    upiPaid: payStatus==="paid"?upiPaid:0,
+  };
+  await rangeDocRef(fromDate, toDate).set(payload, {merge:true});
+  showToast(tr("savedOk"));
+  showPayUpiButton();
+}
+function showPayUpiButton(){
+  const wrap = document.getElementById("payUpiWrap");
+  if(wrap) wrap.style.display = "block";
+}
+function hidePayUpiButton(){
+  const wrap = document.getElementById("payUpiWrap");
+  if(wrap) wrap.style.display = "none";
 }
 
 /* ===================== PAYOUT DETAILS TAB ===================== */
@@ -452,9 +572,12 @@ async function loadPayoutList(){
       return;
     }
     if(d.payStatus==="unpaid") outstanding += (d.ownerAmount||0) - (d.cashPaid||0) - (d.upiPaid||0);
-    list.appendChild(renderPayoutItem(d));
+    list.appendChild(renderPayoutItem(d, doc.id));
   });
   document.getElementById("outstandingAmt").textContent = fmt(outstanding);
+}
+function dateLabel(d){
+  return d.isRange ? `${d.date} → ${d.endDate} (${d.numDays}d)` : d.date;
 }
 function renderLeaveItem(d){
   const div = document.createElement("div");
@@ -462,16 +585,16 @@ function renderLeaveItem(d){
   div.innerHTML = `<div class="top"><span class="date">${d.date}</span><span class="badge leave">${tr("leaveTag")}</span></div>`;
   return div;
 }
-function renderPayoutItem(d){
+function renderPayoutItem(d, id){
   const div = document.createElement("div");
   div.className = "history-item";
   const statusBadge = d.payStatus==="paid" ? `<span class="badge paid">${tr("paid")}</span>` : `<span class="badge unpaid">${tr("unpaid")}</span>`;
   // Drivers can view but not edit entries in the payout list — only the owner opens the edit modal.
   const clickable = currentUser === "owner";
-  const onclickAttr = clickable ? `onclick="openEditModal('${d.date}')" style="cursor:pointer;"` : "";
+  const onclickAttr = clickable ? `onclick="openEditModal('${id}')" style="cursor:pointer;"` : "";
   div.innerHTML = `
     <div class="top" ${onclickAttr}>
-      <span class="date">${d.date}</span>
+      <span class="date">${dateLabel(d)}</span>
       ${statusBadge}
     </div>
     <div class="sub" ${onclickAttr}>
@@ -481,14 +604,14 @@ function renderPayoutItem(d){
       ${d.payStatus==="paid" ? `<span>${tr("cashpaid")}: ${fmt(d.cashPaid)}</span><span>${tr("upipaid")}: ${fmt(d.upiPaid)}</span>` : ""}
     </div>
     <div class="actions">
-      <button class="share-btn" onclick="event.stopPropagation(); shareEntry('${d.date}')">📤 ${tr("share")}</button>
+      <button class="share-btn" onclick="event.stopPropagation(); shareEntry('${id}')">📤 ${tr("share")}</button>
     </div>`;
   return div;
 }
 function closeModal(){ document.getElementById("editModalBg").classList.remove("show"); }
-async function openEditModal(date){
+async function openEditModal(id){
   if(currentUser !== "owner") return; // owner-only, defense in depth alongside the UI gate above
-  const doc = await entryDocRef(date).get();
+  const doc = await entriesDocById(id).get();
   if(!doc.exists) return;
   const d = doc.data();
   const fc = fuelCashCard(d);
@@ -496,7 +619,7 @@ async function openEditModal(date){
   const expRowsHtml = (d.otherExpenses||[]).map(e=>`<div class="row"><span class="lbl">— ${e.desc||tr("otherexp")}</span><span class="val">${fmt(e.amount)}</span></div>`).join("");
   const content = document.getElementById("editModalContent");
   content.innerHTML = `
-    <h3 style="margin-bottom:14px;">${date}</h3>
+    <h3 style="margin-bottom:14px;">${dateLabel(d)}</h3>
     <div class="row"><span class="lbl">${tr("totalrev")}</span><span class="val">${fmt(d.totalRevenue)}</span></div>
     <div class="row"><span class="lbl">${tr("fuelcash")}</span><span class="val">${fmt(fc.cash)}</span></div>
     <div class="row"><span class="lbl">${tr("fuelcard")}</span><span class="val">${fmt(fc.card)}</span></div>
@@ -518,31 +641,31 @@ async function openEditModal(date){
       <div style="flex:1;"><label>${tr("cashpaid")}</label><input type="number" id="modalCash" value="${d.cashPaid||0}"></div>
       <div style="flex:1;"><label>${tr("upipaid")}</label><input type="number" id="modalUpi" value="${d.upiPaid||0}"></div>
     </div>
-    <button class="btn" style="margin-top:10px;" onclick="saveModalPayment('${date}')">${tr("saveentry")}</button>
-    <button class="btn secondary" style="margin-top:10px;" onclick="shareEntry('${date}')">📤 ${tr("share")}</button>
-    <button class="btn outline-red" style="margin-top:10px; background:transparent;" onclick="deleteEntry('${date}')">${tr("delete")}</button>
+    <button class="btn" style="margin-top:10px;" onclick="saveModalPayment('${id}')">${tr("saveentry")}</button>
+    <button class="btn secondary" style="margin-top:10px;" onclick="shareEntry('${id}')">📤 ${tr("share")}</button>
+    <button class="btn outline-red" style="margin-top:10px; background:transparent;" onclick="deleteEntry('${id}')">${tr("delete")}</button>
   `;
   document.getElementById("editModalBg").classList.add("show");
 }
-async function saveModalPayment(date){
+async function saveModalPayment(id){
   const payStatus = document.getElementById("modalPayStatus").value;
   const cashPaid = Number(document.getElementById("modalCash").value)||0;
   const upiPaid = Number(document.getElementById("modalUpi").value)||0;
-  await entryDocRef(date).set({payStatus, cashPaid: payStatus==="paid"?cashPaid:0, upiPaid: payStatus==="paid"?upiPaid:0}, {merge:true});
+  await entriesDocById(id).set({payStatus, cashPaid: payStatus==="paid"?cashPaid:0, upiPaid: payStatus==="paid"?upiPaid:0}, {merge:true});
   closeModal();
   showToast(tr("savedOk"));
   loadPayoutList();
   if(activeTab==="dash") loadDashboard();
 }
-async function deleteEntry(date){
+async function deleteEntry(id){
   if(!confirm(tr("confirmDelete"))) return;
-  await entryDocRef(date).delete();
+  await entriesDocById(id).delete();
   closeModal();
   loadPayoutList();
 }
 
 /* ===================== SHARE PAYOUT AS IMAGE (WhatsApp) ===================== */
-function buildShareReceipt(d, date){
+function buildShareReceipt(d, dateText){
   const fc = fuelCashCard(d);
   const expTotal = d.otherExpTotal!==undefined ? d.otherExpTotal : (Array.isArray(d.otherExpenses) ? d.otherExpenses.reduce((s,e)=>s+(e.amount||0),0) : 0);
   const statusBg = d.payStatus==="paid" ? "background:#dcfce7;color:#16a34a;" : "background:#fee2e2;color:#dc2626;";
@@ -556,7 +679,7 @@ function buildShareReceipt(d, date){
   node.innerHTML = `
     <div class="sr-head">
       <div class="sr-app">🚖 ${tr("appname")}</div>
-      <div class="sr-date">${date}</div>
+      <div class="sr-date">${dateText}</div>
     </div>
     <div class="sr-row"><span>${tr("srTripRev")}</span><span>${fmt(d.tripPayment||0)}</span></div>
     <div class="sr-row"><span>${tr("srOnline")}</span><span>−${fmt(d.onlinePayment)}</span></div>
@@ -570,27 +693,28 @@ function buildShareReceipt(d, date){
     ${handoverRows ? `<div class="sr-handover-title">${tr("srHandover")}</div>${handoverRows}` : ""}
   `;
 }
-async function shareEntry(date){
+async function shareEntry(id){
   if(typeof html2canvas === "undefined"){ showToast(tr("shareFailed")); return; }
-  const doc = await entryDocRef(date).get();
+  const doc = await entriesDocById(id).get();
   if(!doc.exists) return;
   const d = doc.data();
   if(d.leave) return;
-  buildShareReceipt(d, date);
+  const label = dateLabel(d);
+  buildShareReceipt(d, label);
   const node = document.getElementById("shareReceipt");
   try{
     const canvas = await html2canvas(node, {backgroundColor:"#ffffff", scale:2});
     canvas.toBlob(async (blob)=>{
       if(!blob){ showToast(tr("shareFailed")); return; }
-      const file = new File([blob], `payout-${date}.png`, {type:"image/png"});
+      const file = new File([blob], `payout-${id}.png`, {type:"image/png"});
       if(navigator.canShare && navigator.canShare({files:[file]})){
         try{
-          await navigator.share({files:[file], title: tr("shareReceiptTitle"), text: `${tr("owneramt")}: ${fmt(d.ownerAmount)} (${date})`});
+          await navigator.share({files:[file], title: tr("shareReceiptTitle"), text: `${tr("owneramt")}: ${fmt(d.ownerAmount)} (${label})`});
         }catch(e){ /* user cancelled share sheet — not an error */ }
       } else {
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
-        a.href = url; a.download = `payout-${date}.png`; a.click();
+        a.href = url; a.download = `payout-${id}.png`; a.click();
         URL.revokeObjectURL(url);
         showToast(tr("shareFallback"));
       }
@@ -605,6 +729,31 @@ function initMaintScreen(){
   const monthInput = document.getElementById("maintMonth");
   if(!monthInput.value) monthInput.value = new Date().toISOString().slice(0,7);
   loadMaintenance();
+  const upiIdEl = document.getElementById("upiIdInput");
+  const upiNameEl = document.getElementById("upiPayeeNameInput");
+  if(upiIdEl) upiIdEl.value = ownerUpiId || "";
+  if(upiNameEl) upiNameEl.value = ownerUpiName || "";
+}
+async function saveUpiSettings(){
+  const upiId = document.getElementById("upiIdInput").value.trim();
+  const upiPayeeName = document.getElementById("upiPayeeNameInput").value.trim();
+  if(!upiId){ showToast(tr("fillRequired")); return; }
+  await db.collection("settings").doc("pins").set({upiId, upiPayeeName}, {merge:true});
+  ownerUpiId = upiId;
+  ownerUpiName = upiPayeeName;
+  showToast(tr("savedOk"));
+}
+function payViaUpi(){
+  if(!ownerUpiId){
+    showToast("Owner hasn't set up a UPI ID yet");
+    return;
+  }
+  const params = new URLSearchParams({
+    pa: ownerUpiId,
+    pn: ownerUpiName || tr("owner"),
+    cu: "INR"
+  });
+  window.location.href = `upi://pay?${params.toString()}`;
 }
 async function loadMaintenance(){
   const month = document.getElementById("maintMonth").value;
@@ -835,10 +984,12 @@ window.addEventListener("load", ()=>{
   if(savedRole){
     currentUser = savedRole;
     auth.signInAnonymously().then(async ()=>{
+      const settingsDoc = await db.collection("settings").doc("pins").get();
       if(savedRole === "driver"){
-        const settingsDoc = await db.collection("settings").doc("pins").get();
         driverStartDate = (settingsDoc.exists && settingsDoc.data().driverStartDate) || null;
       }
+      ownerUpiId = (settingsDoc.exists && settingsDoc.data().upiId) || null;
+      ownerUpiName = (settingsDoc.exists && settingsDoc.data().upiPayeeName) || null;
       enterApp();
     }).catch(()=>{
       currentUser = null;
