@@ -324,13 +324,13 @@ label{display:block; font-size:12.5px; color:var(--muted); margin-bottom:6px; ma
           <div style="flex:1;"><label id="t_cashpaid">Cash Paid</label><input type="number" id="cashPaid" placeholder="0"></div>
           <div style="flex:1;"><label id="t_upipaid">UPI Paid</label><input type="number" id="upiPaid" placeholder="0"></div>
         </div>
+        <div id="payUpiWrap" style="margin-top:10px;">
+          <button class="btn secondary" onclick="payViaUpi()">📱 Pay via UPI</button>
+        </div>
       </div>
     </div>
 
-    <button class="btn" onclick="saveEntry()" id="t_saveentry" style="margin-bottom:12px;">Save Entry</button>
-    <div id="payUpiWrap" style="display:none; margin-bottom:20px;">
-      <button class="btn secondary" onclick="payViaUpi()">📱 Pay via UPI</button>
-    </div>
+    <button class="btn" onclick="saveEntry()" id="t_saveentry" style="margin-bottom:20px;">Save Entry</button>
   </div>
 
   <!-- PAYOUT DETAILS TAB -->
