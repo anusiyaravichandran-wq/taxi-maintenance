@@ -252,6 +252,11 @@ label{display:block; font-size:12.5px; color:var(--muted); margin-bottom:6px; ma
       <div id="singleDateFields">
         <label id="t_date">Date</label>
         <input type="date" id="entDate">
+        <div class="grid2">
+          <div><label id="t_shiftstart">Shift Start Time</label><input type="time" id="entStartTime"></div>
+          <div><label id="t_shiftend">Shift End Time</label><input type="time" id="entEndTime"></div>
+        </div>
+        <div class="muted-small" id="t_shifttimehint">Optional, but helps avoid mix-ups if a multi-day range also touches this date.</div>
 
         <div class="row" style="margin-top:6px;">
           <span id="t_leave" class="lbl">Mark today as Leave</span>
@@ -261,8 +266,8 @@ label{display:block; font-size:12.5px; color:var(--muted); margin-bottom:6px; ma
 
       <div id="rangeDateFields" style="display:none;">
         <div class="grid2">
-          <div><label>From Date</label><input type="date" id="entFromDate"></div>
-          <div><label>To Date</label><input type="date" id="entToDate"></div>
+          <div><label id="t_fromdatetime">From</label><input type="datetime-local" id="entFromDateTime"></div>
+          <div><label id="t_todatetime">To</label><input type="datetime-local" id="entToDateTime"></div>
         </div>
         <div class="muted-small">Enter combined totals for the whole period below — e.g. total Trip Payment for all the days together.</div>
       </div>
@@ -386,11 +391,12 @@ label{display:block; font-size:12.5px; color:var(--muted); margin-bottom:6px; ma
 
   <!-- DASHBOARD TAB -->
   <div id="screen_dash" class="screen">
-    <div class="dash-head-row">
-      <div class="section-title" id="t_today" style="margin:0;">Today</div>
-      <input type="date" id="dashDayPicker" style="width:auto; margin:0;">
+    <div class="section-title" id="t_dashrange" style="margin:0 0 8px;">Selected Range</div>
+    <div class="grid2">
+      <div><label id="t_rangefrom">From</label><input type="datetime-local" id="dashRangeFrom"></div>
+      <div><label id="t_rangeto">To</label><input type="datetime-local" id="dashRangeTo"></div>
     </div>
-    <div class="stat-grid">
+    <div class="stat-grid" style="margin-top:10px;">
       <div class="stat"><div class="n" id="d_todayRev">₹0</div><div class="l" id="t_revenue">Revenue</div></div>
       <div class="stat"><div class="n" id="d_todayFuel">₹0</div><div class="l" id="t_fuel">Fuel</div></div>
       <div class="stat"><div class="n" id="d_todaySalary">₹0</div><div class="l" id="t_salary">Driver Salary</div></div>
@@ -431,8 +437,8 @@ label{display:block; font-size:12.5px; color:var(--muted); margin-bottom:6px; ma
 
       <div id="exportDailyFields">
         <div class="grid2">
-          <div><label id="t_startdate">Start Date</label><input type="date" id="expStartDate"></div>
-          <div><label id="t_enddate">End Date</label><input type="date" id="expEndDate"></div>
+          <div><label id="t_startdate">Start</label><input type="datetime-local" id="expStartDate"></div>
+          <div><label id="t_enddate">End</label><input type="datetime-local" id="expEndDate"></div>
         </div>
       </div>
       <div id="exportMonthlyFields" style="display:none;">
