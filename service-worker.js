@@ -1,4 +1,4 @@
-const CACHE_NAME = "taxi-tracker-v2";
+const CACHE_NAME = "taxi-tracker-v3";
 const ASSETS = [
   "./index.html",
   "./app.js",
@@ -48,10 +48,14 @@ self.addEventListener("fetch", (event) => {
   }
 
   // App shell (index.html / app.js / page navigations) — network-first so
-  // updates show up the next time the app is opened, offline falls back to cache
+  // updates show up the next time the app is opened, offline falls back to cache.
+  // cache:"no-store" + a cache-busting query param force a truly fresh byte-for-byte
+  // fetch every time — without this, the browser's own HTTP cache (or GitHub Pages'
+  // CDN) can silently hand back a stale response even though we "fetched" it.
   if (isAppShellRequest(url, event.request.mode)) {
+    const bustUrl = url + (url.includes("?") ? "&" : "?") + "_sw=" + Date.now();
     event.respondWith(
-      fetch(event.request).then((response) => {
+      fetch(bustUrl, { cache: "no-store" }).then((response) => {
         const clone = response.clone();
         caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
         return response;
