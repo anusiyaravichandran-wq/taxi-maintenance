@@ -330,7 +330,6 @@ function getOtherExpenses(){
 async function loadEntryForDate(){
   const date = document.getElementById("entDate").value;
   const errEl = document.getElementById("entryBlockedMsg");
-  hidePayUpiButton();
 
   // Driver can't view/edit entries from before their tenure started (previous driver's data).
   if(isBeforeDriverStart(date)){
@@ -385,7 +384,6 @@ async function loadEntryForRange(){
   const fromDate = document.getElementById("entFromDate").value;
   const toDate = document.getElementById("entToDate").value;
   const errEl = document.getElementById("entryBlockedMsg");
-  hidePayUpiButton();
   if(!fromDate || !toDate || toDate < fromDate) return;
 
   if(isBeforeDriverStart(fromDate)){
@@ -465,8 +463,7 @@ async function saveEntry(){
   if(isLeave){
     await entryDocRef(date).set(payload, {merge:true});
     showToast(tr("savedOk"));
-    hidePayUpiButton();
-    return;
+      return;
   }
 
   const c = calcEntryValues();
@@ -489,7 +486,6 @@ async function saveEntry(){
   };
   await entryDocRef(date).set(payload, {merge:true});
   showToast(tr("savedOk"));
-  showPayUpiButton();
 }
 async function saveRangeEntry(){
   const fromDate = document.getElementById("entFromDate").value;
@@ -518,15 +514,6 @@ async function saveRangeEntry(){
   };
   await rangeDocRef(fromDate, toDate).set(payload, {merge:true});
   showToast(tr("savedOk"));
-  showPayUpiButton();
-}
-function showPayUpiButton(){
-  const wrap = document.getElementById("payUpiWrap");
-  if(wrap) wrap.style.display = "block";
-}
-function hidePayUpiButton(){
-  const wrap = document.getElementById("payUpiWrap");
-  if(wrap) wrap.style.display = "none";
 }
 
 /* ===================== PAYOUT DETAILS TAB ===================== */
