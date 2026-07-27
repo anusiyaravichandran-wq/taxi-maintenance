@@ -473,12 +473,7 @@ async function saveEntry(){
   const payStatus = document.getElementById("payStatus").value;
   const cashPaid = Number(document.getElementById("cashPaid").value)||0;
   const upiPaid = Number(document.getElementById("upiPaid").value)||0;
-
-  if(payStatus==="paid"){
-    if(Math.round(cashPaid+upiPaid) !== Math.round(c.ownerAmount) && (cashPaid+upiPaid) > c.ownerAmount){
-      showToast(tr("splitMismatch")); return;
-    }
-  }
+  const unpaidAmount = Math.max(Math.round(c.ownerAmount - cashPaid - upiPaid), 0);
 
   payload = {
     ...payload,
@@ -488,7 +483,7 @@ async function saveEntry(){
     otherExpenses: c.otherExpenses, otherExpTotal: c.otherExpTotal,
     totalRevenue: c.totalRevenue, salaryBase: c.salaryBase, driverSalary: c.salary,
     ownerAmount: c.ownerAmount, payStatus, cashPaid: payStatus==="paid"?cashPaid:0,
-    upiPaid: payStatus==="paid"?upiPaid:0,
+    upiPaid: payStatus==="paid"?upiPaid:0, unpaidAmount: payStatus==="paid"?unpaidAmount:c.ownerAmount,
     // legacy fields cleared so old dashboards/queries relying on them don't double count
     fuelAmount: c.fuelCash + c.fuelCard, fuelMode: null,
   };
@@ -506,12 +501,7 @@ async function saveRangeEntry(){
   const payStatus = document.getElementById("payStatus").value;
   const cashPaid = Number(document.getElementById("cashPaid").value)||0;
   const upiPaid = Number(document.getElementById("upiPaid").value)||0;
-
-  if(payStatus==="paid"){
-    if(Math.round(cashPaid+upiPaid) !== Math.round(c.ownerAmount) && (cashPaid+upiPaid) > c.ownerAmount){
-      showToast(tr("splitMismatch")); return;
-    }
-  }
+  const unpaidAmount = Math.max(Math.round(c.ownerAmount - cashPaid - upiPaid), 0);
 
   const numDays = daysBetweenInclusive(fromDate, toDate);
   const payload = {
@@ -524,7 +514,7 @@ async function saveRangeEntry(){
     otherExpenses: c.otherExpenses, otherExpTotal: c.otherExpTotal,
     totalRevenue: c.totalRevenue, salaryBase: c.salaryBase, driverSalary: c.salary,
     ownerAmount: c.ownerAmount, payStatus, cashPaid: payStatus==="paid"?cashPaid:0,
-    upiPaid: payStatus==="paid"?upiPaid:0,
+    upiPaid: payStatus==="paid"?upiPaid:0, unpaidAmount: payStatus==="paid"?unpaidAmount:c.ownerAmount,
   };
   await rangeDocRef(fromDate, toDate).set(payload, {merge:true});
   showToast(tr("savedOk"));
@@ -571,7 +561,8 @@ async function loadPayoutList(){
       list.appendChild(renderLeaveItem(d));
       return;
     }
-    if(d.payStatus==="unpaid") outstanding += (d.ownerAmount||0) - (d.cashPaid||0) - (d.upiPaid||0);
+    const pending = d.unpaidAmount!==undefined ? d.unpaidAmount : (d.payStatus==="unpaid" ? (d.ownerAmount||0) : 0);
+    if(pending > 0.5) outstanding += pending;
     list.appendChild(renderPayoutItem(d, doc.id));
   });
   document.getElementById("outstandingAmt").textContent = fmt(outstanding);
@@ -588,7 +579,15 @@ function renderLeaveItem(d){
 function renderPayoutItem(d, id){
   const div = document.createElement("div");
   div.className = "history-item";
-  const statusBadge = d.payStatus==="paid" ? `<span class="badge paid">${tr("paid")}</span>` : `<span class="badge unpaid">${tr("unpaid")}</span>`;
+  const pending = d.unpaidAmount!==undefined ? d.unpaidAmount : (d.payStatus==="unpaid" ? (d.ownerAmount||0) : 0);
+  let statusBadge;
+  if(d.payStatus==="paid" && pending <= 0.5){
+    statusBadge = `<span class="badge paid">${tr("paid")}</span>`;
+  } else if(d.payStatus==="paid" && pending > 0.5){
+    statusBadge = `<span class="badge" style="background:rgba(245,158,11,0.15); color:#f59e0b;">Partial</span>`;
+  } else {
+    statusBadge = `<span class="badge unpaid">${tr("unpaid")}</span>`;
+  }
   // Drivers can view but not edit entries in the payout list — only the owner opens the edit modal.
   const clickable = currentUser === "owner";
   const onclickAttr = clickable ? `onclick="openEditModal('${id}')" style="cursor:pointer;"` : "";
@@ -602,6 +601,7 @@ function renderPayoutItem(d, id){
       <span>${tr("salary")}: ${fmt(d.driverSalary)}</span>
       <span>${tr("owneramount")}: ${fmt(d.ownerAmount)}</span>
       ${d.payStatus==="paid" ? `<span>${tr("cashpaid")}: ${fmt(d.cashPaid)}</span><span>${tr("upipaid")}: ${fmt(d.upiPaid)}</span>` : ""}
+      ${pending > 0.5 ? `<span style="color:var(--red);">Pending: ${fmt(pending)}</span>` : ""}
     </div>
     <div class="actions">
       <button class="share-btn" onclick="event.stopPropagation(); shareEntry('${id}')">📤 ${tr("share")}</button>
@@ -651,7 +651,10 @@ async function saveModalPayment(id){
   const payStatus = document.getElementById("modalPayStatus").value;
   const cashPaid = Number(document.getElementById("modalCash").value)||0;
   const upiPaid = Number(document.getElementById("modalUpi").value)||0;
-  await entriesDocById(id).set({payStatus, cashPaid: payStatus==="paid"?cashPaid:0, upiPaid: payStatus==="paid"?upiPaid:0}, {merge:true});
+  const doc = await entriesDocById(id).get();
+  const ownerAmount = doc.exists ? (doc.data().ownerAmount||0) : 0;
+  const unpaidAmount = payStatus==="paid" ? Math.max(Math.round(ownerAmount - cashPaid - upiPaid), 0) : ownerAmount;
+  await entriesDocById(id).set({payStatus, cashPaid: payStatus==="paid"?cashPaid:0, upiPaid: payStatus==="paid"?upiPaid:0, unpaidAmount}, {merge:true});
   closeModal();
   showToast(tr("savedOk"));
   loadPayoutList();
