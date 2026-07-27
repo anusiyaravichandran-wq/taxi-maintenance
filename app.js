@@ -60,6 +60,11 @@ const T = {
     reportsec:"Reports & Export", expdaily:"Daily (Range)", expmonthly:"Monthly",
     startdate:"Start Date", enddate:"End Date", reportmonth:"Month",
     exportpdf:"Export PDF", exportexcel:"Export Excel",
+    shiftstart:"Shift Start Time", shiftend:"Shift End Time",
+    shifttimehint:"Optional, but helps avoid mix-ups if a multi-day range also touches this date.",
+    fromdatetime:"From", todatetime:"To", dashrange:"Selected Range", rangefrom:"From", rangeto:"To",
+    overlapWarn:"This overlaps with an entry you already saved:",
+    overlapConfirm:"Save anyway?",
   },
   ta: {
     appname:"டாக்ஸி கணக்கு", tagline:"வருமானம் & கொடுப்பனவு கணக்கு", owner:"உரிமையாளர்", driver:"டிரைவர்", login:"உள்நுழைய",
@@ -93,6 +98,11 @@ const T = {
     reportsec:"அறிக்கை & ஏற்றுமதி", expdaily:"தினசரி (வரம்பு)", expmonthly:"மாதம் வாரியாக",
     startdate:"தொடக்க தேதி", enddate:"முடிவு தேதி", reportmonth:"மாதம்",
     exportpdf:"PDF ஏற்றுமதி", exportexcel:"Excel ஏற்றுமதி",
+    shiftstart:"ஷிஃப்ட் தொடக்க நேரம்", shiftend:"ஷிஃப்ட் முடிவு நேரம்",
+    shifttimehint:"விருப்பம் — பல நாள் பயணம் இதே தேதியில் இருந்தால் குழப்பம் தவிர்க்க உதவும்.",
+    fromdatetime:"தொடக்கம்", todatetime:"முடிவு", dashrange:"தேர்ந்தெடுத்த காலம்", rangefrom:"தொடக்கம்", rangeto:"முடிவு",
+    overlapWarn:"இது ஏற்கனவே சேமிக்கப்பட்ட ஒரு உள்ளீட்டுடன் மேலெழுகிறது:",
+    overlapConfirm:"இருந்தும் சேமிக்கவா?",
   }
 };
 function tr(key){ return (T[currentLang] && T[currentLang][key]) || T.en[key] || key; }
@@ -239,8 +249,8 @@ function showToast(msg){
 function entryDocRef(dateStr){
   return db.collection("vehicles").doc(CAR_ID).collection("entries").doc(dateStr);
 }
-function rangeDocRef(fromDate, toDate){
-  return db.collection("vehicles").doc(CAR_ID).collection("entries").doc(`range_${fromDate}_${toDate}`);
+function rangeDocRef(fromDT, toDT){
+  return db.collection("vehicles").doc(CAR_ID).collection("entries").doc(`range_${sanitizeDT(fromDT)}_${sanitizeDT(toDT)}`);
 }
 function entriesDocById(id){
   return db.collection("vehicles").doc(CAR_ID).collection("entries").doc(id);
@@ -257,16 +267,87 @@ function isBeforeDriverStart(dateStr){
   return currentUser === "driver" && driverStartDate && dateStr < driverStartDate;
 }
 
+/* ----- Date + time helpers ----- */
+function pad2(n){ return String(n).padStart(2,"0"); }
+function nowLocalDateTimeStr(){
+  const d = new Date();
+  return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+}
+function todayStartDT(){ return todayStr()+"T00:00"; }
+function todayEndDT(){ return todayStr()+"T23:59"; }
+function dtToDateOnly(dt){ return dt ? dt.slice(0,10) : dt; }
+function addDaysToDateStr(dateStr, days){
+  const d = new Date(dateStr+"T00:00:00");
+  d.setDate(d.getDate()+days);
+  return d.toISOString().slice(0,10);
+}
+function sanitizeDT(dt){ return dt.replace(/:/g,"-"); }
+function fmtDateTime(dt){
+  if(!dt) return "";
+  const d = new Date(dt);
+  if(isNaN(d)) return dt;
+  return d.toLocaleString(currentLang==="ta"?"ta-IN":"en-IN", {day:"2-digit", month:"short", hour:"numeric", minute:"2-digit", hour12:true});
+}
+function durationLabel(startDT, endDT){
+  const ms = new Date(endDT) - new Date(startDT);
+  if(isNaN(ms) || ms<=0) return "";
+  const hours = ms/3600000;
+  if(hours < 24) return `${Math.round(hours)}h`;
+  return `${Math.round((hours/24)*10)/10}d`;
+}
+// Canonical start/end datetime for any saved entry — works for old date-only entries too.
+function entryDateTimeRange(d){
+  if(d.isRange){
+    const start = d.startDateTime || (d.date+"T00:00");
+    const end = d.endDateTime || (d.endDate+"T23:59");
+    return {start, end};
+  }
+  const start = d.startDateTime || (d.date+"T"+(d.shiftStartTime||"00:00"));
+  const end = d.endDateTime || (d.date+"T"+(d.shiftEndTime||"23:59"));
+  return {start, end};
+}
+function rangesOverlap(aStart,aEnd,bStart,bEnd){
+  return aStart < bEnd && bStart < aEnd;
+}
+// Looks for any other saved entry whose time window overlaps [startDT,endDT). Fetches a
+// cheap date-bounded window from Firestore first, then filters precisely on the client.
+async function findOverlappingEntries(startDT, endDT, excludeId){
+  const qStart = addDaysToDateStr(dtToDateOnly(startDT), -1);
+  const qEnd = addDaysToDateStr(dtToDateOnly(endDT), 1);
+  const snap = await db.collection("vehicles").doc(CAR_ID).collection("entries")
+    .where("date", ">=", qStart).where("date", "<=", qEnd).get();
+  const overlaps = [];
+  snap.forEach(doc=>{
+    if(doc.id === excludeId) return;
+    const d = doc.data();
+    if(d.leave) return;
+    const {start, end} = entryDateTimeRange(d);
+    if(rangesOverlap(startDT, endDT, start, end)) overlaps.push({id:doc.id, start, end});
+  });
+  return overlaps;
+}
+async function confirmNoOverlap(startDT, endDT, excludeId){
+  const overlaps = await findOverlappingEntries(startDT, endDT, excludeId);
+  if(!overlaps.length) return true;
+  const list = overlaps.map(o=> `${fmtDateTime(o.start)} → ${fmtDateTime(o.end)}`).join("\n");
+  return confirm(`${tr("overlapWarn")}\n${list}\n\n${tr("overlapConfirm")}`);
+}
+
 /* ===================== DRIVER: DAILY ENTRY ===================== */
 function initEntryScreen(){
   const dateInput = document.getElementById("entDate");
   if(!dateInput.value) dateInput.value = todayStr();
   dateInput.onchange = loadEntryForDate;
 
-  const fromInput = document.getElementById("entFromDate");
-  const toInput = document.getElementById("entToDate");
-  if(fromInput && !fromInput.value) fromInput.value = todayStr();
-  if(toInput && !toInput.value) toInput.value = todayStr();
+  const startTimeInput = document.getElementById("entStartTime");
+  const endTimeInput = document.getElementById("entEndTime");
+  if(startTimeInput) startTimeInput.onchange = recalcEntry;
+  if(endTimeInput) endTimeInput.onchange = recalcEntry;
+
+  const fromInput = document.getElementById("entFromDateTime");
+  const toInput = document.getElementById("entToDateTime");
+  if(fromInput && !fromInput.value) fromInput.value = todayStartDT();
+  if(toInput && !toInput.value) toInput.value = nowLocalDateTimeStr();
   if(fromInput) fromInput.onchange = loadEntryForRange;
   if(toInput) toInput.onchange = loadEntryForRange;
 
@@ -346,6 +427,9 @@ async function loadEntryForDate(){
   const doc = await entryDocRef(date).get();
   const data = doc.exists ? doc.data() : null;
   document.getElementById("leaveToggle").checked = data ? !!data.leave : false;
+  const stEl = document.getElementById("entStartTime"), enEl = document.getElementById("entEndTime");
+  if(stEl) stEl.value = data && data.shiftStartTime ? data.shiftStartTime : "";
+  if(enEl) enEl.value = data && data.shiftEndTime ? data.shiftEndTime : "";
   toggleLeaveMode();
   ["tripPayment","onlinePayment","parking","tollCollected"].forEach(id=>{
     document.getElementById(id).value = data && data[id]!==undefined ? data[id] : "";
@@ -381,10 +465,11 @@ async function loadEntryForDate(){
   recalcEntry();
 }
 async function loadEntryForRange(){
-  const fromDate = document.getElementById("entFromDate").value;
-  const toDate = document.getElementById("entToDate").value;
+  const fromDT = document.getElementById("entFromDateTime").value;
+  const toDT = document.getElementById("entToDateTime").value;
   const errEl = document.getElementById("entryBlockedMsg");
-  if(!fromDate || !toDate || toDate < fromDate) return;
+  if(!fromDT || !toDT || toDT <= fromDT) return;
+  const fromDate = dtToDateOnly(fromDT);
 
   if(isBeforeDriverStart(fromDate)){
     document.getElementById("entryFields").style.display = "none";
@@ -394,7 +479,7 @@ async function loadEntryForRange(){
   document.getElementById("entryFields").style.display = "block";
   if(errEl) errEl.style.display = "none";
 
-  const doc = await rangeDocRef(fromDate, toDate).get();
+  const doc = await rangeDocRef(fromDT, toDT).get();
   const data = doc.exists ? doc.data() : null;
   ["tripPayment","onlinePayment","parking","tollCollected"].forEach(id=>{
     document.getElementById(id).value = data && data[id]!==undefined ? data[id] : "";
@@ -458,12 +543,23 @@ async function saveEntry(){
   if(!date){ showToast(tr("fillRequired")); return; }
   if(isBeforeDriverStart(date)) return; // guard: driver cannot write to a previous driver's date
   const isLeave = document.getElementById("leaveToggle").checked;
-  let payload = { date, leave: isLeave, updatedAt: Date.now() };
+  const shiftStartTime = document.getElementById("entStartTime").value || "";
+  const shiftEndTime = document.getElementById("entEndTime").value || "";
+  const startDateTime = date + "T" + (shiftStartTime || "00:00");
+  const endDateTime = date + "T" + (shiftEndTime || "23:59");
+  let payload = { date, leave: isLeave, shiftStartTime, shiftEndTime, startDateTime, endDateTime, updatedAt: Date.now() };
 
   if(isLeave){
     await entryDocRef(date).set(payload, {merge:true});
     showToast(tr("savedOk"));
       return;
+  }
+
+  // Only check for overlaps when the driver has actually entered specific shift times —
+  // a bare date with no times spans the whole day and would collide with everything.
+  if(shiftStartTime && shiftEndTime){
+    const ok = await confirmNoOverlap(startDateTime, endDateTime, date);
+    if(!ok) return;
   }
 
   const c = calcEntryValues();
@@ -488,10 +584,15 @@ async function saveEntry(){
   showToast(tr("savedOk"));
 }
 async function saveRangeEntry(){
-  const fromDate = document.getElementById("entFromDate").value;
-  const toDate = document.getElementById("entToDate").value;
-  if(!fromDate || !toDate || toDate < fromDate){ showToast(tr("fillRequired")); return; }
+  const fromDT = document.getElementById("entFromDateTime").value;
+  const toDT = document.getElementById("entToDateTime").value;
+  if(!fromDT || !toDT || toDT <= fromDT){ showToast(tr("fillRequired")); return; }
+  const fromDate = dtToDateOnly(fromDT), toDate = dtToDateOnly(toDT);
   if(isBeforeDriverStart(fromDate)) return; // guard: driver cannot write before their tenure
+
+  const newId = `range_${sanitizeDT(fromDT)}_${sanitizeDT(toDT)}`;
+  const ok = await confirmNoOverlap(fromDT, toDT, newId);
+  if(!ok) return;
 
   const c = calcEntryValues(); // totals entered are for the WHOLE range, combined
   const payStatus = document.getElementById("payStatus").value;
@@ -503,6 +604,7 @@ async function saveRangeEntry(){
   const payload = {
     isRange: true,
     date: fromDate, endDate: toDate, numDays,
+    startDateTime: fromDT, endDateTime: toDT,
     leave: false, updatedAt: Date.now(),
     tripPayment: c.trip, onlinePayment: c.online,
     tollCharge: c.tollCharge, tollBillTotal: c.tollBillTotal,
@@ -512,7 +614,7 @@ async function saveRangeEntry(){
     ownerAmount: c.ownerAmount, payStatus, cashPaid: payStatus==="paid"?cashPaid:0,
     upiPaid: payStatus==="paid"?upiPaid:0, unpaidAmount: payStatus==="paid"?unpaidAmount:c.ownerAmount,
   };
-  await rangeDocRef(fromDate, toDate).set(payload, {merge:true});
+  await rangeDocRef(fromDT, toDT).set(payload, {merge:true});
   showToast(tr("savedOk"));
 }
 
@@ -555,7 +657,11 @@ async function loadPayoutList(){
   document.getElementById("outstandingAmt").textContent = fmt(outstanding);
 }
 function dateLabel(d){
-  return d.isRange ? `${d.date} → ${d.endDate} (${d.numDays}d)` : d.date;
+  const {start, end} = entryDateTimeRange(d);
+  const hasTime = d.isRange || (d.shiftStartTime && d.shiftEndTime);
+  if(!hasTime) return d.date;
+  const dur = durationLabel(start, end);
+  return `${fmtDateTime(start)} → ${fmtDateTime(end)}${dur ? ` (${dur})` : ""}`;
 }
 function renderLeaveItem(d){
   const div = document.createElement("div");
@@ -773,43 +879,65 @@ async function saveMaintenance(){
 
 /* ===================== DASHBOARD ===================== */
 function initDashboardScreen(){
-  const dayPicker = document.getElementById("dashDayPicker");
+  const rangeFrom = document.getElementById("dashRangeFrom");
+  const rangeTo = document.getElementById("dashRangeTo");
   const monthPicker = document.getElementById("dashMonthPicker");
-  if(!dayPicker.value) dayPicker.value = todayStr();
+  if(!rangeFrom.value) rangeFrom.value = todayStartDT();
+  if(!rangeTo.value) rangeTo.value = todayEndDT();
   if(!monthPicker.value) monthPicker.value = todayStr().slice(0,7);
-  dayPicker.onchange = ()=> loadDashboardDay(dayPicker.value);
+  rangeFrom.onchange = ()=> loadDashboardRange(rangeFrom.value, rangeTo.value);
+  rangeTo.onchange = ()=> loadDashboardRange(rangeFrom.value, rangeTo.value);
   monthPicker.onchange = ()=> loadDashboardMonth(monthPicker.value);
 
   const expStart = document.getElementById("expStartDate");
   const expEnd = document.getElementById("expEndDate");
   const expMonth = document.getElementById("expMonth");
-  if(!expStart.value) expStart.value = todayStr();
-  if(!expEnd.value) expEnd.value = todayStr();
+  if(!expStart.value) expStart.value = todayStartDT();
+  if(!expEnd.value) expEnd.value = todayEndDT();
   if(!expMonth.value) expMonth.value = todayStr().slice(0,7);
 
-  loadDashboardDay(dayPicker.value);
+  loadDashboardRange(rangeFrom.value, rangeTo.value);
   loadDashboardMonth(monthPicker.value);
 }
 async function loadDashboard(){
   initDashboardScreen();
 }
-async function loadDashboardDay(date){
-  const todayDoc = await entryDocRef(date).get();
-  const td = todayDoc.exists ? todayDoc.data() : null;
-  if(td && !td.leave){
-    const fc = fuelCashCard(td);
-    document.getElementById("d_todayRev").textContent = fmt(td.totalRevenue);
-    document.getElementById("d_todayFuel").textContent = fmt(fc.cash + fc.card);
-    document.getElementById("d_todaySalary").textContent = fmt(td.driverSalary);
-    document.getElementById("d_todayOwner").textContent = fmt(td.ownerAmount);
-    document.getElementById("d_todayStatus").innerHTML = td.payStatus==="paid"
-      ? `<span class="badge paid">${tr("paid")}</span>` : `<span class="badge unpaid">${tr("unpaid")}</span>`;
-  } else if(td && td.leave){
-    ["d_todayRev","d_todayFuel","d_todaySalary","d_todayOwner"].forEach(id=>document.getElementById(id).textContent="—");
+// Aggregates every saved entry (single-day or multi-day range) whose time window
+// overlaps the owner's chosen [fromDT, toDT) window — not just entries that start inside it.
+async function loadDashboardRange(fromDT, toDT){
+  if(!fromDT || !toDT || toDT <= fromDT) return;
+  const fromDate = dtToDateOnly(fromDT), toDate = dtToDateOnly(toDT);
+  const snap = await db.collection("vehicles").doc(CAR_ID).collection("entries")
+    .where("date", ">=", addDaysToDateStr(fromDate,-1))
+    .where("date", "<=", addDaysToDateStr(toDate,1)).get();
+
+  let rev=0, fuel=0, salary=0, owner=0, anyEntry=false, allLeave=true, lastStatus=null;
+  snap.forEach(doc=>{
+    const d = doc.data();
+    const {start, end} = entryDateTimeRange(d);
+    if(!rangesOverlap(fromDT, toDT, start, end)) return;
+    anyEntry = true;
+    if(d.leave) return;
+    allLeave = false;
+    const fc = fuelCashCard(d);
+    rev += d.totalRevenue||0;
+    fuel += fc.cash + fc.card;
+    salary += d.driverSalary||0;
+    owner += d.ownerAmount||0;
+    lastStatus = d.payStatus;
+  });
+
+  document.getElementById("d_todayRev").textContent = fmt(rev);
+  document.getElementById("d_todayFuel").textContent = fmt(fuel);
+  document.getElementById("d_todaySalary").textContent = fmt(salary);
+  document.getElementById("d_todayOwner").textContent = fmt(owner);
+  if(!anyEntry){
+    document.getElementById("d_todayStatus").innerHTML = `<span class="badge unpaid">${tr("noEntries")}</span>`;
+  } else if(allLeave){
     document.getElementById("d_todayStatus").innerHTML = `<span class="badge leave">${tr("leaveTag")}</span>`;
   } else {
-    ["d_todayRev","d_todayFuel","d_todaySalary","d_todayOwner"].forEach(id=>document.getElementById(id).textContent=fmt(0));
-    document.getElementById("d_todayStatus").innerHTML = `<span class="badge unpaid">${tr("noEntries")}</span>`;
+    document.getElementById("d_todayStatus").innerHTML = lastStatus==="paid"
+      ? `<span class="badge paid">${tr("paid")}</span>` : `<span class="badge unpaid">${tr("unpaid")}</span>`;
   }
 }
 async function loadDashboardMonth(month){
@@ -864,29 +992,36 @@ function setExportMode(mode){
   document.getElementById("exportMonthlyFields").style.display = mode==="monthly" ? "block":"none";
 }
 async function fetchReportEntries(){
-  let startDate, endDate;
+  let startDate, endDate, startDT, endDT, titleStart, titleEnd;
   if(exportMode==="daily"){
-    startDate = document.getElementById("expStartDate").value;
-    endDate = document.getElementById("expEndDate").value;
+    startDT = document.getElementById("expStartDate").value;
+    endDT = document.getElementById("expEndDate").value;
+    if(!startDT || !endDT || endDT <= startDT){ showToast(tr("fillRequired")); return null; }
+    startDate = dtToDateOnly(startDT); endDate = dtToDateOnly(endDT);
+    titleStart = fmtDateTime(startDT); titleEnd = fmtDateTime(endDT);
   } else {
     const month = document.getElementById("expMonth").value;
-    startDate = month+"-01";
-    endDate = month+"-31";
+    if(!month){ showToast(tr("fillRequired")); return null; }
+    startDate = month+"-01"; endDate = month+"-31";
+    startDT = startDate+"T00:00"; endDT = endDate+"T23:59";
+    titleStart = startDate; titleEnd = endDate;
   }
-  if(!startDate || !endDate){ showToast(tr("fillRequired")); return null; }
   const snap = await db.collection("vehicles").doc(CAR_ID).collection("entries")
-    .where("date",">=",startDate).where("date","<=",endDate).orderBy("date","asc").get();
+    .where("date",">=",addDaysToDateStr(startDate,-1)).where("date","<=",addDaysToDateStr(endDate,1))
+    .orderBy("date","asc").get();
   const rows = [];
   snap.forEach(doc=>{
     const d = doc.data();
+    const {start, end} = entryDateTimeRange(d);
+    if(!rangesOverlap(startDT, endDT, start, end)) return;
     if(d.leave){
-      rows.push({date:d.date, leave:true});
+      rows.push({date:dateLabel(d), leave:true});
       return;
     }
     const fc = fuelCashCard(d);
     const expTotal = d.otherExpTotal!==undefined ? d.otherExpTotal : (Array.isArray(d.otherExpenses)?d.otherExpenses.reduce((s,e)=>s+(e.amount||0),0):0);
     rows.push({
-      date:d.date, leave:false,
+      date:dateLabel(d), leave:false,
       revenue:d.totalRevenue||0, salary:d.driverSalary||0,
       fuelCash:fc.cash, fuelCard:fc.card, parking:d.parking||0,
       tollCharge: d.tollCharge!==undefined?d.tollCharge:0,
@@ -896,7 +1031,7 @@ async function fetchReportEntries(){
       cashPaid:d.cashPaid||0, upiPaid:d.upiPaid||0,
     });
   });
-  return {rows, startDate, endDate};
+  return {rows, startDate:titleStart, endDate:titleEnd, fileTag: exportMode==="daily" ? `${startDate}_to_${endDate}` : startDate.slice(0,7)};
 }
 function reportTotals(rows){
   const t = {revenue:0,salary:0,fuelCash:0,fuelCard:0,parking:0,tollCollected:0,otherExp:0,ownerAmount:0,cashPaid:0,upiPaid:0};
@@ -911,14 +1046,14 @@ function reportTotals(rows){
 async function exportReport(kind){
   const result = await fetchReportEntries();
   if(!result) return;
-  const {rows, startDate, endDate} = result;
+  const {rows, startDate, endDate, fileTag} = result;
   if(!rows.length){ showToast(tr("noEntries")); return; }
   const totals = reportTotals(rows);
-  const title = exportMode==="daily" ? `${startDate} to ${endDate}` : startDate.slice(0,7);
-  if(kind==="pdf") exportReportPDF(rows, totals, title);
-  else exportReportExcel(rows, totals, title);
+  const title = exportMode==="daily" ? `${startDate} to ${endDate}` : startDate;
+  if(kind==="pdf") exportReportPDF(rows, totals, title, fileTag);
+  else exportReportExcel(rows, totals, title, fileTag);
 }
-function exportReportPDF(rows, totals, title){
+function exportReportPDF(rows, totals, title, fileTag){
   if(typeof window.jspdf === "undefined"){ showToast(tr("shareFailed")); return; }
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({orientation:"landscape", unit:"pt"});
@@ -940,9 +1075,9 @@ function exportReportPDF(rows, totals, title){
     footStyles:{fillColor:[30,41,59]}, didParseCell:(data)=>{
       if(data.row.index === body.length-1) data.cell.styles.fontStyle = "bold";
     }});
-  doc.save(`report-${title.replace(/\s+/g,"_")}.pdf`);
+  doc.save(`report-${(fileTag||title).replace(/\s+/g,"_")}.pdf`);
 }
-function exportReportExcel(rows, totals, title){
+function exportReportExcel(rows, totals, title, fileTag){
   if(typeof XLSX === "undefined"){ showToast(tr("shareFailed")); return; }
   const data = rows.map(r=> r.leave
     ? {Date:r.date, Status:tr("leaveTag")}
@@ -964,7 +1099,7 @@ function exportReportExcel(rows, totals, title){
   const ws = XLSX.utils.json_to_sheet(data);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Report");
-  XLSX.writeFile(wb, `report-${title.replace(/\s+/g,"_")}.xlsx`);
+  XLSX.writeFile(wb, `report-${(fileTag||title).replace(/\s+/g,"_")}.xlsx`);
 }
 
 /* ===================== INIT / SERVICE WORKER ===================== */
