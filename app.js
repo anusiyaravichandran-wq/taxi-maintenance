@@ -282,6 +282,16 @@ function addDaysToDateStr(dateStr, days){
   return d.toISOString().slice(0,10);
 }
 function sanitizeDT(dt){ return dt.replace(/:/g,"-"); }
+function combineDT(dateVal, timeVal, fallbackTime){
+  if(!dateVal) return "";
+  return `${dateVal}T${timeVal || fallbackTime}`;
+}
+function splitDT(dt, dateEl, timeEl){
+  if(!dt){ if(dateEl) dateEl.value=""; if(timeEl) timeEl.value=""; return; }
+  const [d,t] = dt.split("T");
+  if(dateEl) dateEl.value = d || "";
+  if(timeEl) timeEl.value = t || "";
+}
 function fmtDateTime(dt){
   if(!dt) return "";
   const d = new Date(dt);
@@ -344,12 +354,13 @@ function initEntryScreen(){
   if(startTimeInput) startTimeInput.onchange = recalcEntry;
   if(endTimeInput) endTimeInput.onchange = recalcEntry;
 
-  const fromInput = document.getElementById("entFromDateTime");
-  const toInput = document.getElementById("entToDateTime");
-  if(fromInput && !fromInput.value) fromInput.value = todayStartDT();
-  if(toInput && !toInput.value) toInput.value = nowLocalDateTimeStr();
-  if(fromInput) fromInput.onchange = loadEntryForRange;
-  if(toInput) toInput.onchange = loadEntryForRange;
+  const fromDateEl = document.getElementById("entFromDate");
+  const fromTimeEl = document.getElementById("entFromTime");
+  const toDateEl = document.getElementById("entToDate");
+  const toTimeEl = document.getElementById("entToTime");
+  if(fromDateEl && !fromDateEl.value){ fromDateEl.value = todayStr(); fromTimeEl.value = "08:00"; }
+  if(toDateEl && !toDateEl.value){ toDateEl.value = todayStr(); toTimeEl.value = "20:00"; }
+  [fromDateEl, fromTimeEl, toDateEl, toTimeEl].forEach(el=>{ if(el) el.onchange = loadEntryForRange; });
 
   ["tripPayment","onlinePayment","tollCharge","fuelCash","fuelCard","parking","tollCollected"].forEach(id=>{
     document.getElementById(id).oninput = recalcEntry;
@@ -465,8 +476,8 @@ async function loadEntryForDate(){
   recalcEntry();
 }
 async function loadEntryForRange(){
-  const fromDT = document.getElementById("entFromDateTime").value;
-  const toDT = document.getElementById("entToDateTime").value;
+  const fromDT = combineDT(document.getElementById("entFromDate").value, document.getElementById("entFromTime").value, "00:00");
+  const toDT = combineDT(document.getElementById("entToDate").value, document.getElementById("entToTime").value, "23:59");
   const errEl = document.getElementById("entryBlockedMsg");
   if(!fromDT || !toDT || toDT <= fromDT) return;
   const fromDate = dtToDateOnly(fromDT);
@@ -584,8 +595,8 @@ async function saveEntry(){
   showToast(tr("savedOk"));
 }
 async function saveRangeEntry(){
-  const fromDT = document.getElementById("entFromDateTime").value;
-  const toDT = document.getElementById("entToDateTime").value;
+  const fromDT = combineDT(document.getElementById("entFromDate").value, document.getElementById("entFromTime").value, "00:00");
+  const toDT = combineDT(document.getElementById("entToDate").value, document.getElementById("entToTime").value, "23:59");
   if(!fromDT || !toDT || toDT <= fromDT){ showToast(tr("fillRequired")); return; }
   const fromDate = dtToDateOnly(fromDT), toDate = dtToDateOnly(toDT);
   if(isBeforeDriverStart(fromDate)) return; // guard: driver cannot write before their tenure
@@ -879,24 +890,31 @@ async function saveMaintenance(){
 
 /* ===================== DASHBOARD ===================== */
 function initDashboardScreen(){
-  const rangeFrom = document.getElementById("dashRangeFrom");
-  const rangeTo = document.getElementById("dashRangeTo");
+  const rangeFromDate = document.getElementById("dashRangeFromDate");
+  const rangeFromTime = document.getElementById("dashRangeFromTime");
+  const rangeToDate = document.getElementById("dashRangeToDate");
+  const rangeToTime = document.getElementById("dashRangeToTime");
   const monthPicker = document.getElementById("dashMonthPicker");
-  if(!rangeFrom.value) rangeFrom.value = todayStartDT();
-  if(!rangeTo.value) rangeTo.value = todayEndDT();
+  if(!rangeFromDate.value){ rangeFromDate.value = todayStr(); rangeFromTime.value = "00:00"; }
+  if(!rangeToDate.value){ rangeToDate.value = todayStr(); rangeToTime.value = "23:59"; }
   if(!monthPicker.value) monthPicker.value = todayStr().slice(0,7);
-  rangeFrom.onchange = ()=> loadDashboardRange(rangeFrom.value, rangeTo.value);
-  rangeTo.onchange = ()=> loadDashboardRange(rangeFrom.value, rangeTo.value);
+  const refreshRange = ()=> loadDashboardRange(
+    combineDT(rangeFromDate.value, rangeFromTime.value, "00:00"),
+    combineDT(rangeToDate.value, rangeToTime.value, "23:59")
+  );
+  [rangeFromDate, rangeFromTime, rangeToDate, rangeToTime].forEach(el=> el.onchange = refreshRange);
   monthPicker.onchange = ()=> loadDashboardMonth(monthPicker.value);
 
   const expStart = document.getElementById("expStartDate");
   const expEnd = document.getElementById("expEndDate");
+  const expStartTime = document.getElementById("expStartTime");
+  const expEndTime = document.getElementById("expEndTime");
   const expMonth = document.getElementById("expMonth");
-  if(!expStart.value) expStart.value = todayStartDT();
-  if(!expEnd.value) expEnd.value = todayEndDT();
+  if(!expStart.value){ expStart.value = todayStr(); expStartTime.value = "00:00"; }
+  if(!expEnd.value){ expEnd.value = todayStr(); expEndTime.value = "23:59"; }
   if(!expMonth.value) expMonth.value = todayStr().slice(0,7);
 
-  loadDashboardRange(rangeFrom.value, rangeTo.value);
+  refreshRange();
   loadDashboardMonth(monthPicker.value);
 }
 async function loadDashboard(){
@@ -994,8 +1012,8 @@ function setExportMode(mode){
 async function fetchReportEntries(){
   let startDate, endDate, startDT, endDT, titleStart, titleEnd;
   if(exportMode==="daily"){
-    startDT = document.getElementById("expStartDate").value;
-    endDT = document.getElementById("expEndDate").value;
+    startDT = combineDT(document.getElementById("expStartDate").value, document.getElementById("expStartTime").value, "00:00");
+    endDT = combineDT(document.getElementById("expEndDate").value, document.getElementById("expEndTime").value, "23:59");
     if(!startDT || !endDT || endDT <= startDT){ showToast(tr("fillRequired")); return null; }
     startDate = dtToDateOnly(startDT); endDate = dtToDateOnly(endDT);
     titleStart = fmtDateTime(startDT); titleEnd = fmtDateTime(endDT);
