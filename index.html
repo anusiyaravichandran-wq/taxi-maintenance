@@ -11,6 +11,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <style>
 :root{
+  color-scheme: dark;
   --bg:#0f172a; --bg2:#1e293b; --card:#1e293b; --border:#334155;
   --accent:#f59e0b; --accent2:#fbbf24; --green:#22c55e; --red:#ef4444;
   --text:#f1f5f9; --muted:#94a3b8; --blue:#3b82f6;
@@ -62,7 +63,7 @@ h1{font-size:22px;} h2{font-size:18px; margin-bottom:12px;}
 }
 .role-pick button.sel{border-color:var(--accent); background:rgba(245,158,11,0.15); color:var(--accent2);}
 .role-pick button .e{display:block; font-size:24px; margin-bottom:6px;}
-input[type=password], input[type=text], input[type=number], select, input[type=date]{
+input[type=password], input[type=text], input[type=number], select, input[type=date], input[type=time], input[type=datetime-local]{
   width:100%; padding:13px 14px; border-radius:12px; border:1.5px solid var(--border);
   background:var(--bg2); color:var(--text); font-size:16px; margin-bottom:12px;
 }
@@ -265,11 +266,17 @@ label{display:block; font-size:12.5px; color:var(--muted); margin-bottom:6px; ma
       </div>
 
       <div id="rangeDateFields" style="display:none;">
+        <label id="t_fromdatetime">From</label>
         <div class="grid2">
-          <div><label id="t_fromdatetime">From</label><input type="datetime-local" id="entFromDateTime"></div>
-          <div><label id="t_todatetime">To</label><input type="datetime-local" id="entToDateTime"></div>
+          <input type="date" id="entFromDate">
+          <input type="time" id="entFromTime">
         </div>
-        <div class="muted-small">Enter combined totals for the whole period below — e.g. total Trip Payment for all the days together.</div>
+        <label id="t_todatetime" style="margin-top:10px; display:block;">To</label>
+        <div class="grid2">
+          <input type="date" id="entToDate">
+          <input type="time" id="entToTime">
+        </div>
+        <div class="muted-small" style="margin-top:2px;">Enter combined totals for the whole period below — e.g. total Trip Payment for all the days together.</div>
       </div>
 
       <div class="muted-small" id="entryBlockedMsg" style="display:none; color:var(--red);">This date is from before your start — ask the owner if you need it changed.</div>
@@ -392,9 +399,15 @@ label{display:block; font-size:12.5px; color:var(--muted); margin-bottom:6px; ma
   <!-- DASHBOARD TAB -->
   <div id="screen_dash" class="screen">
     <div class="section-title" id="t_dashrange" style="margin:0 0 8px;">Selected Range</div>
+    <label id="t_rangefrom">From</label>
     <div class="grid2">
-      <div><label id="t_rangefrom">From</label><input type="datetime-local" id="dashRangeFrom"></div>
-      <div><label id="t_rangeto">To</label><input type="datetime-local" id="dashRangeTo"></div>
+      <input type="date" id="dashRangeFromDate">
+      <input type="time" id="dashRangeFromTime">
+    </div>
+    <label id="t_rangeto" style="margin-top:10px; display:block;">To</label>
+    <div class="grid2">
+      <input type="date" id="dashRangeToDate">
+      <input type="time" id="dashRangeToTime">
     </div>
     <div class="stat-grid" style="margin-top:10px;">
       <div class="stat"><div class="n" id="d_todayRev">₹0</div><div class="l" id="t_revenue">Revenue</div></div>
@@ -436,9 +449,15 @@ label{display:block; font-size:12.5px; color:var(--muted); margin-bottom:6px; ma
       </div>
 
       <div id="exportDailyFields">
+        <label id="t_startdate">Start</label>
         <div class="grid2">
-          <div><label id="t_startdate">Start</label><input type="datetime-local" id="expStartDate"></div>
-          <div><label id="t_enddate">End</label><input type="datetime-local" id="expEndDate"></div>
+          <input type="date" id="expStartDate">
+          <input type="time" id="expStartTime">
+        </div>
+        <label id="t_enddate" style="margin-top:10px; display:block;">End</label>
+        <div class="grid2">
+          <input type="date" id="expEndDate">
+          <input type="time" id="expEndTime">
         </div>
       </div>
       <div id="exportMonthlyFields" style="display:none;">
