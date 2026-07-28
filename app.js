@@ -1,1180 +1,500 @@
-/* ===================== FIREBASE CONFIG ===================== */
-/* TODO: Replace with your own Firebase project config (Firestore + Auth-anonymous enabled) */
-const firebaseConfig = {
-  apiKey: "AIzaSyAeupI3EuaNwcII_rDexSmQR8ais_csfSw",
-  authDomain: "taxi-maintenance.firebaseapp.com",
-  projectId: "taxi-maintenance",
-  storageBucket: "taxi-maintenance.firebasestorage.app",
-  messagingSenderId: "323446645683",
-  appId: "1:323446645683:web:1016eadfaa260816a8e1c6"
-};
-firebase.initializeApp(firebaseConfig);
-const auth = firebase.auth();
-const db = firebase.firestore();
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>டாக்ஸி கணக்கு | Taxi Tracker</title>
+<meta name="theme-color" content="#0f172a">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<style>
+:root{
+  color-scheme: dark;
+  --bg:#0f172a; --bg2:#1e293b; --card:#1e293b; --border:#334155;
+  --accent:#f59e0b; --accent2:#fbbf24; --green:#22c55e; --red:#ef4444;
+  --text:#f1f5f9; --muted:#94a3b8; --blue:#3b82f6;
+}
+*{box-sizing:border-box; margin:0; padding:0;}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  background:var(--bg); color:var(--text); padding-bottom:70px;
+  -webkit-tap-highlight-color:transparent;
+}
+.screen{display:none; padding:16px; max-width:600px; margin:0 auto;}
+.screen.active{display:block;}
+h1,h2,h3{font-weight:700;}
+h1{font-size:22px;} h2{font-size:18px; margin-bottom:12px;}
+.app-header{
+  position:sticky; top:0; background:var(--bg); z-index:10; padding:16px;
+  display:flex; justify-content:space-between; align-items:center;
+  border-bottom:1px solid var(--border);
+}
+.app-header .title{font-size:18px; font-weight:700; display:flex; flex-direction:column;}
+.app-header .title small{color:var(--muted); font-weight:400; font-size:12px;}
+.icon-btn{
+  background:var(--bg2); border:1px solid var(--border); color:var(--text);
+  border-radius:10px; padding:8px 12px; font-size:13px; cursor:pointer;
+}
+.lang-toggle{display:flex; gap:4px;}
+.lang-toggle button{
+  background:var(--bg2); border:1px solid var(--border); color:var(--muted);
+  padding:6px 10px; border-radius:8px; font-size:12px; cursor:pointer;
+}
+.lang-toggle button.on{background:var(--accent); color:#000; border-color:var(--accent);}
 
-/* ===================== CONSTANTS ===================== */
-const CAR_ID = "car1"; // single car for now; structure supports adding more later
-const DRIVER_SALARY_PCT = 0.30;
-const TOLL_GST_PCT = 0.05;
-const DEFAULT_PINS = { owner: "1234", driver: "0000" };
+/* Login */
+.login-wrap{
+  min-height:100vh; display:flex; flex-direction:column; justify-content:center;
+  align-items:center; padding:24px;
+}
+.login-card{
+  background:var(--card); border:1px solid var(--border); border-radius:18px;
+  padding:28px 24px; width:100%; max-width:360px; text-align:center;
+}
+.login-card .emoji{font-size:42px; margin-bottom:8px;}
+.login-card h1{font-size:22px; margin-bottom:4px;}
+.login-card p{color:var(--muted); font-size:13px; margin-bottom:20px;}
+.role-pick{display:flex; gap:10px; margin-bottom:18px;}
+.role-pick button{
+  flex:1; padding:16px 8px; border-radius:14px; border:1.5px solid var(--border);
+  background:var(--bg2); color:var(--text); font-size:14px; font-weight:600; cursor:pointer;
+}
+.role-pick button.sel{border-color:var(--accent); background:rgba(245,158,11,0.15); color:var(--accent2);}
+.role-pick button .e{display:block; font-size:24px; margin-bottom:6px;}
+input[type=password], input[type=text], input[type=number], select, input[type=date], input[type=time], input[type=datetime-local]{
+  width:100%; padding:13px 14px; border-radius:12px; border:1.5px solid var(--border);
+  background:var(--bg2); color:var(--text); font-size:16px; margin-bottom:12px;
+}
+input::placeholder{color:var(--muted);}
+.btn{
+  width:100%; padding:14px; border-radius:12px; border:none; font-size:15px;
+  font-weight:700; cursor:pointer; background:var(--accent); color:#1c1206;
+}
+.btn.secondary{background:var(--bg2); color:var(--text); border:1.5px solid var(--border);}
+.btn.green{background:var(--green); color:#06210f;}
+.btn.outline-red{background:transparent; border:1.5px solid var(--red); color:var(--red);}
+.err{color:var(--red); font-size:13px; margin:-4px 0 12px;}
 
-let currentRole = "owner";
-let currentLang = localStorage.getItem("lang") || "en";
-let currentUser = null; // 'owner' | 'driver'
-let driverStartDate = null; // "YYYY-MM-DD" — driver only sees entries on/after this date
-let entryMode = "single"; // 'single' | 'range' — which entry form is active
-let ownerUpiId = null;
-let ownerUpiName = null;
+/* Tabs */
+.tabbar{
+  position:fixed; bottom:0; left:0; right:0; background:var(--bg2);
+  border-top:1px solid var(--border); display:flex; z-index:20;
+  padding-bottom:env(safe-area-inset-bottom);
+}
+.tabbar button{
+  flex:1; background:none; border:none; color:var(--muted); padding:10px 4px 8px;
+  font-size:11px; display:flex; flex-direction:column; align-items:center; gap:3px; cursor:pointer;
+}
+.tabbar button .e{font-size:19px;}
+.tabbar button.active{color:var(--accent2);}
 
-/* ===================== TRANSLATIONS ===================== */
-const T = {
-  en: {
-    appname:"Taxi Tracker", tagline:"Revenue & Payout Tracker", owner:"Owner", driver:"Driver", login:"Login",
-    date:"Date", leave:"Mark today as Leave", kmsec:"Kilometers", startkm:"Start KM", endkm:"End KM",
-    revsec:"Revenue", trip:"Trip Payment (Total Fare, as per bill)", online:"Online / RedTaxi Credit",
-    tollbill:"Toll Charges (as per bill)", tollbillhint:"Enter the base Toll Charges line from the customer's bill (not the GST line) — the app adds 5% GST automatically and excludes the total only when calculating driver salary.",
-    expsec:"Expenses", fuel:"Fuel", fuelcash:"Fuel (Cash)", fuelcard:"Fuel (Card)",
-    parking:"Parking (cash)", tollcollected:"Toll Collected (FASTag)",
-    otherexp:"Other Expenses", addexpense:"Add Expense", otherexptotal:"Other Expenses Total",
-    expamount:"Amount", expdesc:"Description",
-    calcsec:"Auto Calculated", totalrev:"Total Revenue",
-    salary30:"Driver Salary (30%)", salarybasehint:"Calculated on Total Revenue minus Toll-in-Bill",
-    addtoll:"+ Toll Collected (FASTag)", deduct:"− Online, Fuel(Cash), Parking, Other Exp.",
-    owneramt:"Owner Amount", paysec:"Owner Payment Status", unpaid:"Unpaid", paid:"Paid", cashpaid:"Cash Paid",
-    upipaid:"UPI Paid", saveentry:"Save Entry", outstanding:"Total Outstanding (Unpaid)", monthpick:"Month",
-    insurance:"Insurance", tyre:"Tyre Cost", redcomm:"RedTaxi Commission", maintbudget:"Maintenance (Budget)",
-    maintactual:"Actual Maintenance", others:"Others", notes:"Notes", savemaint:"Save Maintenance",
-    commhint:"RedTaxi settles commission 3x/month: 1–10 (paid 13th), 11–20 (paid 23rd), 21–end (paid 3rd next month). Enter the total commission for the month here.",
-    today:"Today", revenue:"Revenue", salary:"Driver Salary", owneramount:"Owner Amount", status:"Status",
-    thismonth:"This Month", totalrevenue:"Total Revenue", kmdriven:"KM Driven", fixedcosts:"EMI+Ins+Tyre+Maint+Others",
-    profit:"Profit", paidtotal:"Owner Amount Paid", paidcash:"— Cash", paidupi:"— UPI", unpaidtotal:"Unpaid (Outstanding)",
-    tab_entry:"Entry", tab_payout:"Payout", tab_maint:"Maintenance", tab_dash:"Dashboard",
-    headerEntry:"Daily Entry", headerPayout:"Payout Details", headerMaint:"Maintenance", headerDash:"Dashboard",
-    wrongPin:"Wrong PIN, try again", savedOk:"Saved successfully", fillRequired:"Please fill required fields",
-    splitMismatch:"Cash + UPI must equal Owner Amount", markPaid:"Mark Paid", markUnpaid:"Mark Unpaid", edit:"Edit",
-    leaveTag:"Leave Day", noEntries:"No entries yet", delete:"Delete", confirmDelete:"Delete this entry?",
-    share:"Share", shareReceiptTitle:"Daily Payout", shareFailed:"Couldn't generate image", shareFallback:"Image downloaded — attach it on WhatsApp",
-    srTripRev:"Trip Total (Fare)", srOnline:"Online/Credit (settled separately)", srFuelCash:"Fuel (Cash)", srParking:"Parking",
-    srOtherExp:"Other Expenses", srTollCollected:"Toll Collected", srSalary:"Driver Salary (30%)",
-    srHandover:"Handed Over To Owner",
-    reportsec:"Reports & Export", expdaily:"Daily (Range)", expmonthly:"Monthly",
-    startdate:"Start Date", enddate:"End Date", reportmonth:"Month",
-    exportpdf:"Export PDF", exportexcel:"Export Excel",
-    shiftstart:"Shift Start Time", shiftend:"Shift End Time",
-    shifttimehint:"Optional, but helps avoid mix-ups if a multi-day range also touches this date.",
-    fromdatetime:"From", todatetime:"To", dashrange:"Selected Range", rangefrom:"From", rangeto:"To",
-    overlapWarn:"This overlaps with an entry you already saved:",
-    overlapConfirm:"Save anyway?",
-  },
-  ta: {
-    appname:"டாக்ஸி கணக்கு", tagline:"வருமானம் & கொடுப்பனவு கணக்கு", owner:"உரிமையாளர்", driver:"டிரைவர்", login:"உள்நுழைய",
-    date:"தேதி", leave:"இன்று லீவு", kmsec:"கிலோமீட்டர்", startkm:"தொடக்க KM", endkm:"முடிவு KM",
-    revsec:"வருமானம்", trip:"டிரிப் பணம் (மொத்த கட்டணம், பில் படி)", online:"ஆன்லைன் / RedTaxi கிரெடிட்",
-    tollbill:"டோல் கட்டணம் (பில் படி)", tollbillhint:"வாடிக்கையாளர் பில்லில் உள்ள அடிப்படை டோல் கட்டணத்தை மட்டும் உள்ளிடவும் (GST வரி இல்லாமல்) — ஆப் தானாக 5% GST சேர்த்து, டிரைவர் சம்பளம் கணக்கிடும்போது மட்டும் அந்த மொத்தத்தை கழிக்கும்.",
-    expsec:"செலவுகள்", fuel:"எரிபொருள்", fuelcash:"எரிபொருள் (கேஷ்)", fuelcard:"எரிபொருள் (கார்டு)",
-    parking:"பார்க்கிங் (கேஷ்)", tollcollected:"வசூலித்த டோல் (FASTag)",
-    otherexp:"மற்ற செலவுகள்", addexpense:"செலவு சேர்க்க", otherexptotal:"மற்ற செலவுகள் மொத்தம்",
-    expamount:"தொகை", expdesc:"விவரம்",
-    calcsec:"தானியங்கி கணக்கீடு", totalrev:"மொத்த வருமானம்",
-    salary30:"டிரைவர் சம்பளம் (30%)", salarybasehint:"மொத்த வருமானம் கழித்தல் பில் டோல் அடிப்படையில் கணக்கிடப்படும்",
-    addtoll:"+ வசூலித்த டோல் (FASTag)", deduct:"− ஆன்லைன், எரிபொருள்(கேஷ்), பார்க்கிங், மற்ற செலவுகள்",
-    owneramt:"உரிமையாளர் தொகை", paysec:"கட்டண நிலை", unpaid:"செலுத்தப்படவில்லை", paid:"செலுத்தப்பட்டது", cashpaid:"கேஷ்",
-    upipaid:"UPI", saveentry:"சேமிக்க", outstanding:"மொத்த நிலுவை", monthpick:"மாதம்",
-    insurance:"இன்சூரன்ஸ்", tyre:"டயர் செலவு", redcomm:"RedTaxi கமிஷன்", maintbudget:"பராமரிப்பு (பட்ஜெட்)",
-    maintactual:"உண்மையான பராமரிப்பு", others:"மற்றவை", notes:"குறிப்புகள்", savemaint:"சேமிக்க",
-    commhint:"RedTaxi மாதம் 3 முறை கமிஷன் வசூலிக்கும்: 1–10 (13ம் தேதி), 11–20 (23ம் தேதி), 21–முடிவு (அடுத்த மாத 3ம் தேதி). மாத மொத்த கமிஷனை இங்கே உள்ளிடவும்.",
-    today:"இன்று", revenue:"வருமானம்", salary:"டிரைவர் சம்பளம்", owneramount:"உரிமையாளர் தொகை", status:"நிலை",
-    thismonth:"இந்த மாதம்", totalrevenue:"மொத்த வருமானம்", kmdriven:"ஓட்டிய KM", fixedcosts:"EMI+இன்சூரன்ஸ்+டயர்+பராமரிப்பு+மற்றவை",
-    profit:"லாபம்", paidtotal:"செலுத்திய தொகை", paidcash:"— கேஷ்", paidupi:"— UPI", unpaidtotal:"நிலுவை",
-    tab_entry:"உள்ளீடு", tab_payout:"கொடுப்பனவு", tab_maint:"பராமரிப்பு", tab_dash:"டாஷ்போர்டு",
-    headerEntry:"தினசரி உள்ளீடு", headerPayout:"கொடுப்பனவு விவரம்", headerMaint:"பராமரிப்பு", headerDash:"டாஷ்போர்டு",
-    wrongPin:"தவறான PIN, மீண்டும் முயற்சிக்கவும்", savedOk:"வெற்றிகரமாக சேமிக்கப்பட்டது", fillRequired:"தேவையான புலங்களை நிரப்பவும்",
-    splitMismatch:"கேஷ் + UPI = உரிமையாளர் தொகைக்கு சமமாக இருக்க வேண்டும்", markPaid:"செலுத்தியதாக குறி", markUnpaid:"செலுத்தாததாக குறி", edit:"திருத்து",
-    leaveTag:"லீவு நாள்", noEntries:"உள்ளீடுகள் இல்லை", delete:"நீக்கு", confirmDelete:"இந்த உள்ளீட்டை நீக்கவா?",
-    share:"பகிர்", shareReceiptTitle:"தினசரி கொடுப்பனவு", shareFailed:"படம் உருவாக்க முடியவில்லை", shareFallback:"படம் டவுன்லோட் ஆனது — WhatsApp இல் இணைக்கவும்",
-    srTripRev:"டிரிப் மொத்த கட்டணம்", srOnline:"ஆன்லைன்/கிரெடிட் (தனியாக தீர்வு)", srFuelCash:"எரிபொருள் (கேஷ்)", srParking:"பார்க்கிங்",
-    srOtherExp:"மற்ற செலவுகள்", srTollCollected:"வசூலித்த டோல்", srSalary:"டிரைவர் சம்பளம் (30%)",
-    srHandover:"உரிமையாளரிடம் ஒப்படைத்தது",
-    reportsec:"அறிக்கை & ஏற்றுமதி", expdaily:"தினசரி (வரம்பு)", expmonthly:"மாதம் வாரியாக",
-    startdate:"தொடக்க தேதி", enddate:"முடிவு தேதி", reportmonth:"மாதம்",
-    exportpdf:"PDF ஏற்றுமதி", exportexcel:"Excel ஏற்றுமதி",
-    shiftstart:"ஷிஃப்ட் தொடக்க நேரம்", shiftend:"ஷிஃப்ட் முடிவு நேரம்",
-    shifttimehint:"விருப்பம் — பல நாள் பயணம் இதே தேதியில் இருந்தால் குழப்பம் தவிர்க்க உதவும்.",
-    fromdatetime:"தொடக்கம்", todatetime:"முடிவு", dashrange:"தேர்ந்தெடுத்த காலம்", rangefrom:"தொடக்கம்", rangeto:"முடிவு",
-    overlapWarn:"இது ஏற்கனவே சேமிக்கப்பட்ட ஒரு உள்ளீட்டுடன் மேலெழுகிறது:",
-    overlapConfirm:"இருந்தும் சேமிக்கவா?",
-  }
-};
-function tr(key){ return (T[currentLang] && T[currentLang][key]) || T.en[key] || key; }
+/* Cards & generic */
+.card{
+  background:var(--card); border:1px solid var(--border); border-radius:14px;
+  padding:16px; margin-bottom:14px;
+}
+.row{display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;}
+.row:last-child{margin-bottom:0;}
+.row .lbl{color:var(--muted); font-size:13px;}
+.row .val{font-weight:700; font-size:14px;}
+label{display:block; font-size:12.5px; color:var(--muted); margin-bottom:6px; margin-top:10px;}
+.grid2{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
+.section-title{font-size:13px; color:var(--accent2); font-weight:700; margin:18px 0 8px; text-transform:uppercase; letter-spacing:.5px;}
+.stat-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px;}
+.stat{background:var(--card); border:1px solid var(--border); border-radius:14px; padding:14px;}
+.stat .n{font-size:20px; font-weight:800;}
+.stat .l{font-size:11.5px; color:var(--muted); margin-top:2px;}
+.badge{padding:3px 9px; border-radius:20px; font-size:11px; font-weight:700;}
+.badge.paid{background:rgba(34,197,94,.18); color:var(--green);}
+.badge.unpaid{background:rgba(239,68,68,.18); color:var(--red);}
+.badge.leave{background:rgba(148,163,184,.18); color:var(--muted);}
+.history-item{
+  background:var(--card); border:1px solid var(--border); border-radius:14px;
+  padding:14px; margin-bottom:10px; cursor:pointer;
+}
+.history-item .top{display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;}
+.history-item .date{font-weight:700; font-size:14px;}
+.history-item .sub{display:flex; flex-wrap:wrap; gap:10px; font-size:12px; color:var(--muted);}
+.fab{
+  position:fixed; bottom:80px; right:18px; background:var(--accent); color:#1c1206;
+  width:54px; height:54px; border-radius:50%; border:none; font-size:26px; font-weight:700;
+  box-shadow:0 6px 16px rgba(0,0,0,.4); z-index:15; cursor:pointer;
+}
+.toast{
+  position:fixed; bottom:90px; left:50%; transform:translateX(-50%); background:var(--green);
+  color:#06210f; padding:10px 18px; border-radius:30px; font-size:13px; font-weight:700;
+  z-index:100; opacity:0; transition:opacity .3s; pointer-events:none;
+}
+.toast.show{opacity:1;}
+.pay-split{display:flex; gap:8px;}
+.muted-small{font-size:11.5px; color:var(--muted); margin-top:-6px; margin-bottom:10px;}
+.empty{text-align:center; color:var(--muted); padding:40px 10px; font-size:13px;}
+.modal-bg{
+  position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:50; display:none;
+  align-items:flex-end; justify-content:center;
+}
+.modal-bg.show{display:flex;}
+.modal{
+  background:var(--bg2); border-radius:18px 18px 0 0; padding:20px; width:100%; max-width:600px;
+  max-height:85vh; overflow-y:auto;
+}
+.modal-handle{width:40px; height:4px; background:var(--border); border-radius:4px; margin:0 auto 14px;}
+.divider{height:1px; background:var(--border); margin:14px 0;}
+.profit-pos{color:var(--green);} .profit-neg{color:var(--red);}
 
-function applyTranslations(){
-  document.querySelectorAll("[id^='t_']").forEach(el=>{
-    const key = el.id.slice(2);
-    if(T.en[key]) el.textContent = tr(key);
-  });
-  document.getElementById("langTaBtn").className = currentLang==="ta"?"on":"";
-  document.getElementById("langEnBtn").className = currentLang==="en"?"on":"";
-  document.getElementById("langTaBtn2").className = currentLang==="ta"?"on":"";
-  document.getElementById("langEnBtn2").className = currentLang==="en"?"on":"";
-  updateHeader();
-  buildTabbar();
+/* Other Expenses (repeatable rows) */
+.exp-row{display:flex; gap:8px; align-items:flex-start; margin-bottom:8px;}
+.exp-row input{margin-bottom:0;}
+.exp-row .exp-amt{flex:0 0 90px;}
+.exp-row .exp-desc{flex:1;}
+.exp-row .exp-remove{
+  flex:0 0 38px; height:46px; border-radius:12px; border:1.5px solid var(--border);
+  background:var(--bg2); color:var(--red); font-size:18px; cursor:pointer; font-weight:700;
 }
-function setLang(l){ currentLang = l; localStorage.setItem("lang", l); applyTranslations(); renderActiveScreen(); }
+.btn-add-exp{
+  width:100%; padding:11px; border-radius:12px; border:1.5px dashed var(--border);
+  background:transparent; color:var(--accent2); font-size:13px; font-weight:700; cursor:pointer; margin-top:2px;
+}
+.exp-total-row{display:flex; justify-content:space-between; font-size:12.5px; color:var(--muted); margin-top:8px;}
 
-/* ===================== LOGIN ===================== */
-function selectRole(role){
-  currentRole = role;
-  document.getElementById("roleOwnerBtn").className = role==="owner" ? "sel":"";
-  document.getElementById("roleDriverBtn").className = role==="driver" ? "sel":"";
+/* Payout history item actions */
+.history-item .actions{display:flex; gap:8px; margin-top:10px;}
+.history-item .actions button{
+  flex:1; padding:9px; border-radius:10px; font-size:12px; font-weight:700; cursor:pointer;
+  border:1.5px solid var(--border); background:var(--bg2); color:var(--text);
 }
-async function doLogin(){
-  const pin = document.getElementById("pinInput").value.trim();
-  const errEl = document.getElementById("loginErr");
-  errEl.style.display="none";
-  try{
-    if(!auth.currentUser){ await auth.signInAnonymously(); }
-    const settingsDoc = await db.collection("settings").doc("pins").get();
-    const pins = settingsDoc.exists ? settingsDoc.data() : DEFAULT_PINS;
-    const correct = pins[currentRole] || DEFAULT_PINS[currentRole];
-    if(pin !== correct){
-      errEl.textContent = tr("wrongPin");
-      errEl.style.display="block";
-      return;
-    }
-    // Driver only sees entries on/after this date (set in Firestore settings/pins
-    // as "driverStartDate" whenever the driver PIN is reset for a new driver).
-    driverStartDate = (settingsDoc.exists && settingsDoc.data().driverStartDate) || null;
-    ownerUpiId = (settingsDoc.exists && settingsDoc.data().upiId) || null;
-    ownerUpiName = (settingsDoc.exists && settingsDoc.data().upiPayeeName) || null;
-    currentUser = currentRole;
-    localStorage.setItem("taxiapp_role", currentRole);
-    enterApp();
-  }catch(e){
-    errEl.textContent = e.message;
-    errEl.style.display="block";
-  }
-}
-function logout(){
-  localStorage.removeItem("taxiapp_role");
-  currentUser = null;
-  driverStartDate = null;
-  document.getElementById("mainApp").style.display="none";
-  document.getElementById("loginScreen").className="screen active";
-  document.getElementById("pinInput").value="";
-}
+.history-item .actions .share-btn{border-color:var(--green); color:var(--green);}
 
-/* ===================== APP SHELL / TABS ===================== */
-const TABS = {
-  owner: [
-    {id:"dash", icon:"📊", labelKey:"tab_dash"},
-    {id:"payout", icon:"💰", labelKey:"tab_payout"},
-    {id:"maint", icon:"🔧", labelKey:"tab_maint"},
-  ],
-  driver: [
-    {id:"entry", icon:"📝", labelKey:"tab_entry"},
-    {id:"payout", icon:"💰", labelKey:"tab_payout"},
-  ]
-};
-let activeTab = "dash";
-let pendingReload = false;
-function maybeReload(){
-  if(pendingReload && activeTab !== "entry"){
-    pendingReload = false;
-    window.location.reload();
-  }
+/* Share receipt template (rendered off-screen, captured as image) */
+#shareReceipt{
+  position:fixed; left:-9999px; top:0; width:380px; background:#ffffff; color:#111827;
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; padding:22px;
 }
+#shareReceipt .sr-head{text-align:center; margin-bottom:14px;}
+#shareReceipt .sr-head .sr-app{font-size:14px; font-weight:800; color:#0f172a;}
+#shareReceipt .sr-head .sr-date{font-size:20px; font-weight:800; margin-top:4px; color:#0f172a;}
+#shareReceipt .sr-row{display:flex; justify-content:space-between; font-size:13px; padding:6px 0; border-bottom:1px solid #e5e7eb; color:#374151;}
+#shareReceipt .sr-row span:last-child{font-weight:700; color:#111827;}
+#shareReceipt .sr-final{display:flex; justify-content:space-between; margin-top:12px; padding-top:12px; border-top:2px solid #111827;}
+#shareReceipt .sr-final span:first-child{font-size:14px; font-weight:700; color:#111827;}
+#shareReceipt .sr-final span:last-child{font-size:22px; font-weight:800; color:#16a34a;}
+#shareReceipt .sr-status{text-align:center; margin-top:10px; font-size:12px; font-weight:700; padding:5px; border-radius:8px;}
+#shareReceipt .sr-handover-title{font-size:11px; font-weight:700; color:#6b7280; text-transform:uppercase; letter-spacing:.5px; margin-top:14px; margin-bottom:4px;}
 
-function buildTabbar(){
-  const bar = document.getElementById("tabbar");
-  bar.innerHTML = "";
-  const tabs = TABS[currentUser] || TABS.owner;
-  if(!tabs.find(t=>t.id===activeTab)) activeTab = tabs[0].id;
-  tabs.forEach(t=>{
-    const btn = document.createElement("button");
-    btn.className = t.id===activeTab ? "active":"";
-    btn.innerHTML = `<span class="e">${t.icon}</span><span>${tr(t.labelKey)}</span>`;
-    btn.onclick = ()=> switchTab(t.id);
-    bar.appendChild(btn);
-  });
-}
-function switchTab(id){
-  activeTab = id;
-  buildTabbar();
-  renderActiveScreen();
-  maybeReload();
-}
-function updateHeader(){
-  const map = {dash:"headerDash", payout:"headerPayout", maint:"headerMaint", entry:"headerEntry"};
-  document.getElementById("headerTitle").textContent = tr(map[activeTab] || "headerDash");
-  document.getElementById("headerSub").textContent = currentUser==="owner" ? tr("owner") : tr("driver");
-}
-function showScreen(id){
-  document.querySelectorAll(".screen").forEach(s=>s.classList.remove("active"));
-  const el = document.getElementById("screen_"+id);
-  if(el) el.classList.add("active");
+/* Dashboard picker rows */
+.dash-head-row{display:flex; justify-content:space-between; align-items:center; margin:18px 0 8px;}
+.dash-head-row input[type=date], .dash-head-row input[type=month]{
+  width:auto; padding:8px 10px; font-size:13px; margin-bottom:0;
 }
 
-function enterApp(){
-  document.getElementById("loginScreen").className="screen";
-  document.getElementById("mainApp").style.display="block";
-  applyTranslations();
-  activeTab = (currentUser==="driver") ? "entry" : "dash";
-  buildTabbar();
-  renderActiveScreen();
+/* Export toggle */
+.export-toggle{display:flex; gap:8px; margin-bottom:14px;}
+.export-toggle button{
+  flex:1; padding:10px; border-radius:12px; border:1.5px solid var(--border);
+  background:var(--bg2); color:var(--muted); font-size:13px; font-weight:700; cursor:pointer;
 }
-function renderActiveScreen(){
-  showScreen(activeTab);
-  updateHeader();
-  if(activeTab==="entry") initEntryScreen();
-  if(activeTab==="payout") loadPayoutList();
-  if(activeTab==="maint") initMaintScreen();
-  if(activeTab==="dash") loadDashboard();
-}
+.export-toggle button.on{border-color:var(--accent); background:rgba(245,158,11,0.15); color:var(--accent2);}
+</style>
+</head>
+<body>
 
-/* ===================== HELPERS ===================== */
-function todayStr(){
-  const d = new Date();
-  return d.toISOString().slice(0,10);
-}
-function fmt(n){
-  n = Number(n)||0;
-  return "₹" + n.toLocaleString("en-IN", {maximumFractionDigits:0});
-}
-function showToast(msg){
-  const t = document.getElementById("toast");
-  t.textContent = msg;
-  t.classList.add("show");
-  setTimeout(()=>t.classList.remove("show"), 1800);
-}
-function entryDocRef(dateStr){
-  return db.collection("vehicles").doc(CAR_ID).collection("entries").doc(dateStr);
-}
-function rangeDocRef(fromDT, toDT){
-  return db.collection("vehicles").doc(CAR_ID).collection("entries").doc(`range_${sanitizeDT(fromDT)}_${sanitizeDT(toDT)}`);
-}
-function entriesDocById(id){
-  return db.collection("vehicles").doc(CAR_ID).collection("entries").doc(id);
-}
-function daysBetweenInclusive(fromDate, toDate){
-  const a = new Date(fromDate+"T00:00:00"), b = new Date(toDate+"T00:00:00");
-  return Math.round((b-a)/86400000) + 1;
-}
-function maintDocRef(monthStr){ // monthStr like 2026-06
-  return db.collection("vehicles").doc(CAR_ID).collection("maintenance").doc(monthStr);
-}
-// True if this date belongs to a previous driver's tenure and should be hidden from the driver view.
-function isBeforeDriverStart(dateStr){
-  return currentUser === "driver" && driverStartDate && dateStr < driverStartDate;
-}
-
-/* ----- Date + time helpers ----- */
-function pad2(n){ return String(n).padStart(2,"0"); }
-function nowLocalDateTimeStr(){
-  const d = new Date();
-  return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
-}
-function todayStartDT(){ return todayStr()+"T00:00"; }
-function todayEndDT(){ return todayStr()+"T23:59"; }
-function dtToDateOnly(dt){ return dt ? dt.slice(0,10) : dt; }
-function addDaysToDateStr(dateStr, days){
-  const d = new Date(dateStr+"T00:00:00");
-  d.setDate(d.getDate()+days);
-  return d.toISOString().slice(0,10);
-}
-function sanitizeDT(dt){ return dt.replace(/:/g,"-"); }
-function combineDT(dateVal, timeVal, fallbackTime){
-  if(!dateVal) return "";
-  return `${dateVal}T${timeVal || fallbackTime}`;
-}
-function splitDT(dt, dateEl, timeEl){
-  if(!dt){ if(dateEl) dateEl.value=""; if(timeEl) timeEl.value=""; return; }
-  const [d,t] = dt.split("T");
-  if(dateEl) dateEl.value = d || "";
-  if(timeEl) timeEl.value = t || "";
-}
-function fmtDateTime(dt){
-  if(!dt) return "";
-  const d = new Date(dt);
-  if(isNaN(d)) return dt;
-  return d.toLocaleString(currentLang==="ta"?"ta-IN":"en-IN", {day:"2-digit", month:"short", hour:"numeric", minute:"2-digit", hour12:true});
-}
-function durationLabel(startDT, endDT){
-  const ms = new Date(endDT) - new Date(startDT);
-  if(isNaN(ms) || ms<=0) return "";
-  const hours = ms/3600000;
-  if(hours < 24) return `${Math.round(hours)}h`;
-  return `${Math.round((hours/24)*10)/10}d`;
-}
-// Canonical start/end datetime for any saved entry — works for old date-only entries too.
-function entryDateTimeRange(d){
-  if(d.isRange){
-    const start = d.startDateTime || (d.date+"T00:00");
-    const end = d.endDateTime || (d.endDate+"T23:59");
-    return {start, end};
-  }
-  const start = d.startDateTime || (d.date+"T"+(d.shiftStartTime||"00:00"));
-  const end = d.endDateTime || (d.date+"T"+(d.shiftEndTime||"23:59"));
-  return {start, end};
-}
-function rangesOverlap(aStart,aEnd,bStart,bEnd){
-  return aStart < bEnd && bStart < aEnd;
-}
-// Looks for any other saved entry whose time window overlaps [startDT,endDT). Fetches a
-// cheap date-bounded window from Firestore first, then filters precisely on the client.
-async function findOverlappingEntries(startDT, endDT, excludeId){
-  const qStart = addDaysToDateStr(dtToDateOnly(startDT), -1);
-  const qEnd = addDaysToDateStr(dtToDateOnly(endDT), 1);
-  const snap = await db.collection("vehicles").doc(CAR_ID).collection("entries")
-    .where("date", ">=", qStart).where("date", "<=", qEnd).get();
-  const overlaps = [];
-  snap.forEach(doc=>{
-    if(doc.id === excludeId) return;
-    const d = doc.data();
-    if(d.leave) return;
-    const {start, end} = entryDateTimeRange(d);
-    if(rangesOverlap(startDT, endDT, start, end)) overlaps.push({id:doc.id, start, end});
-  });
-  return overlaps;
-}
-async function confirmNoOverlap(startDT, endDT, excludeId){
-  const overlaps = await findOverlappingEntries(startDT, endDT, excludeId);
-  if(!overlaps.length) return true;
-  const list = overlaps.map(o=> `${fmtDateTime(o.start)} → ${fmtDateTime(o.end)}`).join("\n");
-  return confirm(`${tr("overlapWarn")}\n${list}\n\n${tr("overlapConfirm")}`);
-}
-
-/* ===================== DRIVER: DAILY ENTRY ===================== */
-function initEntryScreen(){
-  const dateInput = document.getElementById("entDate");
-  if(!dateInput.value) dateInput.value = todayStr();
-  dateInput.onchange = loadEntryForDate;
-
-  const startTimeInput = document.getElementById("entStartTime");
-  const endTimeInput = document.getElementById("entEndTime");
-  if(startTimeInput) startTimeInput.onchange = recalcEntry;
-  if(endTimeInput) endTimeInput.onchange = recalcEntry;
-
-  const fromDateEl = document.getElementById("entFromDate");
-  const fromTimeEl = document.getElementById("entFromTime");
-  const toDateEl = document.getElementById("entToDate");
-  const toTimeEl = document.getElementById("entToTime");
-  if(fromDateEl && !fromDateEl.value){ fromDateEl.value = todayStr(); fromTimeEl.value = "08:00"; }
-  if(toDateEl && !toDateEl.value){ toDateEl.value = todayStr(); toTimeEl.value = "20:00"; }
-  [fromDateEl, fromTimeEl, toDateEl, toTimeEl].forEach(el=>{ if(el) el.onchange = loadEntryForRange; });
-
-  ["tripPayment","onlinePayment","tollCharge","fuelCash","fuelCard","parking","tollCollected"].forEach(id=>{
-    document.getElementById(id).oninput = recalcEntry;
-  });
-
-  setEntryMode(entryMode); // re-apply current mode's UI + reload its data
-}
-function setEntryMode(mode){
-  entryMode = mode;
-  const singleBtn = document.getElementById("entryModeSingleBtn");
-  const rangeBtn = document.getElementById("entryModeRangeBtn");
-  if(singleBtn) singleBtn.className = mode==="single" ? "on":"";
-  if(rangeBtn) rangeBtn.className = mode==="range" ? "on":"";
-  const singleFields = document.getElementById("singleDateFields");
-  const rangeFields = document.getElementById("rangeDateFields");
-  if(singleFields) singleFields.style.display = mode==="single" ? "block":"none";
-  if(rangeFields) rangeFields.style.display = mode==="range" ? "block":"none";
-  // Leave toggle only makes sense for a single day
-  const leaveRow = document.getElementById("leaveToggle");
-  if(leaveRow) leaveRow.disabled = (mode==="range");
-  if(mode==="single") loadEntryForDate();
-  else loadEntryForRange();
-}
-
-/* ----- Other Expenses (repeatable rows) ----- */
-let expRowSeq = 0;
-function addExpenseRow(amount, desc){
-  const id = "exp_" + (expRowSeq++);
-  const wrap = document.createElement("div");
-  wrap.className = "exp-row";
-  wrap.id = id;
-  wrap.innerHTML = `
-    <input type="number" class="exp-amt" placeholder="${tr('expamount')}" value="${amount!==undefined?amount:''}" oninput="recalcEntry()">
-    <input type="text" class="exp-desc" placeholder="${tr('expdesc')}" value="${desc!==undefined?desc.replace(/"/g,'&quot;'):''}" oninput="recalcEntry()">
-    <button type="button" class="exp-remove" onclick="removeExpenseRow('${id}')">×</button>
-  `;
-  document.getElementById("otherExpList").appendChild(wrap);
-  recalcEntry();
-}
-function removeExpenseRow(id){
-  const el = document.getElementById(id);
-  if(el) el.remove();
-  recalcEntry();
-}
-function clearExpenseRows(){
-  document.getElementById("otherExpList").innerHTML = "";
-}
-function getOtherExpenses(){
-  const rows = document.querySelectorAll("#otherExpList .exp-row");
-  const list = [];
-  rows.forEach(row=>{
-    const amount = Number(row.querySelector(".exp-amt").value) || 0;
-    const desc = row.querySelector(".exp-desc").value || "";
-    if(amount || desc) list.push({amount, desc});
-  });
-  return list;
-}
-
-async function loadEntryForDate(){
-  const date = document.getElementById("entDate").value;
-  const errEl = document.getElementById("entryBlockedMsg");
-
-  // Driver can't view/edit entries from before their tenure started (previous driver's data).
-  if(isBeforeDriverStart(date)){
-    document.getElementById("entryFields").style.display = "none";
-    const tgl = document.getElementById("leaveToggle");
-    if(tgl) tgl.disabled = true;
-    if(errEl) errEl.style.display = "block";
-    return;
-  }
-  if(errEl) errEl.style.display = "none";
-  const tgl2 = document.getElementById("leaveToggle");
-  if(tgl2) tgl2.disabled = false;
-
-  const doc = await entryDocRef(date).get();
-  const data = doc.exists ? doc.data() : null;
-  document.getElementById("leaveToggle").checked = data ? !!data.leave : false;
-  const stEl = document.getElementById("entStartTime"), enEl = document.getElementById("entEndTime");
-  if(stEl) stEl.value = data && data.shiftStartTime ? data.shiftStartTime : "";
-  if(enEl) enEl.value = data && data.shiftEndTime ? data.shiftEndTime : "";
-  toggleLeaveMode();
-  ["tripPayment","onlinePayment","parking","tollCollected"].forEach(id=>{
-    document.getElementById(id).value = data && data[id]!==undefined ? data[id] : "";
-  });
-  // Toll base charge — new entries store tollCharge directly. Legacy entries only had
-  // tollBill (a manually entered GST-inclusive total) — back-calculate an approx base for editing.
-  if(data && data.tollCharge!==undefined){
-    document.getElementById("tollCharge").value = data.tollCharge;
-  } else if(data && data.tollBill!==undefined){
-    document.getElementById("tollCharge").value = Math.round((data.tollBill/(1+TOLL_GST_PCT))*100)/100;
-  } else {
-    document.getElementById("tollCharge").value = "";
-  }
-  // Fuel cash/card — fall back to legacy single fuelAmount+fuelMode entries
-  if(data && (data.fuelCash!==undefined || data.fuelCard!==undefined)){
-    document.getElementById("fuelCash").value = data.fuelCash!==undefined ? data.fuelCash : "";
-    document.getElementById("fuelCard").value = data.fuelCard!==undefined ? data.fuelCard : "";
-  } else if(data && data.fuelAmount!==undefined){
-    document.getElementById("fuelCash").value = data.fuelMode==="cash" ? data.fuelAmount : "";
-    document.getElementById("fuelCard").value = data.fuelMode==="card" ? data.fuelAmount : "";
-  } else {
-    document.getElementById("fuelCash").value = "";
-    document.getElementById("fuelCard").value = "";
-  }
-  clearExpenseRows();
-  if(data && Array.isArray(data.otherExpenses) && data.otherExpenses.length){
-    data.otherExpenses.forEach(e=> addExpenseRow(e.amount, e.desc));
-  }
-  document.getElementById("payStatus").value = (data && data.payStatus) || "unpaid";
-  document.getElementById("cashPaid").value = data && data.cashPaid!==undefined ? data.cashPaid : "";
-  document.getElementById("upiPaid").value = data && data.upiPaid!==undefined ? data.upiPaid : "";
-  togglePaySplit();
-  recalcEntry();
-}
-async function loadEntryForRange(){
-  const fromDT = combineDT(document.getElementById("entFromDate").value, document.getElementById("entFromTime").value, "00:00");
-  const toDT = combineDT(document.getElementById("entToDate").value, document.getElementById("entToTime").value, "23:59");
-  const errEl = document.getElementById("entryBlockedMsg");
-  if(!fromDT || !toDT || toDT <= fromDT) return;
-  const fromDate = dtToDateOnly(fromDT);
-
-  if(isBeforeDriverStart(fromDate)){
-    document.getElementById("entryFields").style.display = "none";
-    if(errEl) errEl.style.display = "block";
-    return;
-  }
-  document.getElementById("entryFields").style.display = "block";
-  if(errEl) errEl.style.display = "none";
-
-  const doc = await rangeDocRef(fromDT, toDT).get();
-  const data = doc.exists ? doc.data() : null;
-  ["tripPayment","onlinePayment","parking","tollCollected"].forEach(id=>{
-    document.getElementById(id).value = data && data[id]!==undefined ? data[id] : "";
-  });
-  document.getElementById("tollCharge").value = data && data.tollCharge!==undefined ? data.tollCharge : "";
-  document.getElementById("fuelCash").value = data && data.fuelCash!==undefined ? data.fuelCash : "";
-  document.getElementById("fuelCard").value = data && data.fuelCard!==undefined ? data.fuelCard : "";
-  clearExpenseRows();
-  if(data && Array.isArray(data.otherExpenses) && data.otherExpenses.length){
-    data.otherExpenses.forEach(e=> addExpenseRow(e.amount, e.desc));
-  }
-  document.getElementById("payStatus").value = (data && data.payStatus) || "unpaid";
-  document.getElementById("cashPaid").value = data && data.cashPaid!==undefined ? data.cashPaid : "";
-  document.getElementById("upiPaid").value = data && data.upiPaid!==undefined ? data.upiPaid : "";
-  togglePaySplit();
-  recalcEntry();
-}
-function toggleLeaveMode(){
-  const isLeave = document.getElementById("leaveToggle").checked;
-  document.getElementById("entryFields").style.display = isLeave ? "none" : "block";
-}
-function calcEntryValues(){
-  const v = id=> Number(document.getElementById(id).value) || 0;
-  const trip = v("tripPayment"), online = v("onlinePayment");
-  const tollCharge = v("tollCharge");
-  const tollBillTotal = Math.round(tollCharge * (1+TOLL_GST_PCT) * 100) / 100;
-  const fuelCash = v("fuelCash"), fuelCard = v("fuelCard");
-  const parking = v("parking"), tollCollected = v("tollCollected");
-  const otherExpenses = getOtherExpenses();
-  const otherExpTotal = otherExpenses.reduce((s,e)=> s + (Number(e.amount)||0), 0);
-
-  const totalRevenue = trip;
-  const salaryBase = Math.max(totalRevenue - tollBillTotal, 0);
-  const salary = salaryBase * DRIVER_SALARY_PCT;
-  const deductions = online + fuelCash + parking + otherExpTotal;
-  const ownerAmount = totalRevenue - deductions - salary + tollCollected;
-
-  return {trip, online, tollCharge, tollBillTotal, fuelCash, fuelCard, parking, tollCollected,
-    otherExpenses, otherExpTotal, totalRevenue, salaryBase, salary, deductions, ownerAmount};
-}
-function recalcEntry(){
-  const c = calcEntryValues();
-  document.getElementById("calcRevenue").textContent = fmt(c.totalRevenue);
-  document.getElementById("calcSalary").textContent = fmt(c.salary);
-  document.getElementById("calcTollCollected").textContent = "+" + fmt(c.tollCollected);
-  document.getElementById("calcDeduct").textContent = "−" + fmt(c.deductions);
-  document.getElementById("calcOwnerAmt").textContent = fmt(c.ownerAmount);
-  const gstEl = document.getElementById("tollGstReadout");
-  if(gstEl) gstEl.textContent = `Incl. GST 5%: ${fmt(c.tollBillTotal)}`;
-  const totalEl = document.getElementById("otherExpTotalVal");
-  if(totalEl) totalEl.textContent = fmt(c.otherExpTotal);
-}
-function togglePaySplit(){
-  const isPaid = document.getElementById("payStatus").value === "paid";
-  document.getElementById("paySplitFields").style.display = isPaid ? "block":"none";
-}
-async function saveEntry(){
-  if(entryMode === "range") return saveRangeEntry();
-
-  const date = document.getElementById("entDate").value;
-  if(!date){ showToast(tr("fillRequired")); return; }
-  if(isBeforeDriverStart(date)) return; // guard: driver cannot write to a previous driver's date
-  const isLeave = document.getElementById("leaveToggle").checked;
-  const shiftStartTime = document.getElementById("entStartTime").value || "";
-  const shiftEndTime = document.getElementById("entEndTime").value || "";
-  const startDateTime = date + "T" + (shiftStartTime || "00:00");
-  const endDateTime = date + "T" + (shiftEndTime || "23:59");
-  let payload = { date, leave: isLeave, shiftStartTime, shiftEndTime, startDateTime, endDateTime, updatedAt: Date.now() };
-
-  if(isLeave){
-    await entryDocRef(date).set(payload, {merge:true});
-    showToast(tr("savedOk"));
-      return;
-  }
-
-  // Only check for overlaps when the driver has actually entered specific shift times —
-  // a bare date with no times spans the whole day and would collide with everything.
-  if(shiftStartTime && shiftEndTime){
-    const ok = await confirmNoOverlap(startDateTime, endDateTime, date);
-    if(!ok) return;
-  }
-
-  const c = calcEntryValues();
-  const payStatus = document.getElementById("payStatus").value;
-  const cashPaid = Number(document.getElementById("cashPaid").value)||0;
-  const upiPaid = Number(document.getElementById("upiPaid").value)||0;
-  const unpaidAmount = Math.max(Math.round(c.ownerAmount - cashPaid - upiPaid), 0);
-
-  payload = {
-    ...payload,
-    tripPayment: c.trip, onlinePayment: c.online,
-    tollCharge: c.tollCharge, tollBillTotal: c.tollBillTotal,
-    fuelCash: c.fuelCash, fuelCard: c.fuelCard, parking: c.parking, tollCollected: c.tollCollected,
-    otherExpenses: c.otherExpenses, otherExpTotal: c.otherExpTotal,
-    totalRevenue: c.totalRevenue, salaryBase: c.salaryBase, driverSalary: c.salary,
-    ownerAmount: c.ownerAmount, payStatus, cashPaid: payStatus==="paid"?cashPaid:0,
-    upiPaid: payStatus==="paid"?upiPaid:0, unpaidAmount: payStatus==="paid"?unpaidAmount:c.ownerAmount,
-    // legacy fields cleared so old dashboards/queries relying on them don't double count
-    fuelAmount: c.fuelCash + c.fuelCard, fuelMode: null,
-  };
-  await entryDocRef(date).set(payload, {merge:true});
-  showToast(tr("savedOk"));
-}
-async function saveRangeEntry(){
-  const fromDT = combineDT(document.getElementById("entFromDate").value, document.getElementById("entFromTime").value, "00:00");
-  const toDT = combineDT(document.getElementById("entToDate").value, document.getElementById("entToTime").value, "23:59");
-  if(!fromDT || !toDT || toDT <= fromDT){ showToast(tr("fillRequired")); return; }
-  const fromDate = dtToDateOnly(fromDT), toDate = dtToDateOnly(toDT);
-  if(isBeforeDriverStart(fromDate)) return; // guard: driver cannot write before their tenure
-
-  const newId = `range_${sanitizeDT(fromDT)}_${sanitizeDT(toDT)}`;
-  const ok = await confirmNoOverlap(fromDT, toDT, newId);
-  if(!ok) return;
-
-  const c = calcEntryValues(); // totals entered are for the WHOLE range, combined
-  const payStatus = document.getElementById("payStatus").value;
-  const cashPaid = Number(document.getElementById("cashPaid").value)||0;
-  const upiPaid = Number(document.getElementById("upiPaid").value)||0;
-  const unpaidAmount = Math.max(Math.round(c.ownerAmount - cashPaid - upiPaid), 0);
-
-  const numDays = daysBetweenInclusive(fromDate, toDate);
-  const payload = {
-    isRange: true,
-    date: fromDate, endDate: toDate, numDays,
-    startDateTime: fromDT, endDateTime: toDT,
-    leave: false, updatedAt: Date.now(),
-    tripPayment: c.trip, onlinePayment: c.online,
-    tollCharge: c.tollCharge, tollBillTotal: c.tollBillTotal,
-    fuelCash: c.fuelCash, fuelCard: c.fuelCard, parking: c.parking, tollCollected: c.tollCollected,
-    otherExpenses: c.otherExpenses, otherExpTotal: c.otherExpTotal,
-    totalRevenue: c.totalRevenue, salaryBase: c.salaryBase, driverSalary: c.salary,
-    ownerAmount: c.ownerAmount, payStatus, cashPaid: payStatus==="paid"?cashPaid:0,
-    upiPaid: payStatus==="paid"?upiPaid:0, unpaidAmount: payStatus==="paid"?unpaidAmount:c.ownerAmount,
-  };
-  await rangeDocRef(fromDT, toDT).set(payload, {merge:true});
-  showToast(tr("savedOk"));
-}
-
-/* ===================== PAYOUT DETAILS TAB ===================== */
-function fuelCashCard(d){
-  // New entries store fuelCash/fuelCard directly. Old entries (pre-update) only have fuelAmount+fuelMode.
-  if(d.fuelCash!==undefined || d.fuelCard!==undefined){
-    return { cash: d.fuelCash||0, card: d.fuelCard||0 };
-  }
-  if(d.fuelAmount!==undefined){
-    return { cash: d.fuelMode==="cash" ? (d.fuelAmount||0) : 0, card: d.fuelMode==="card" ? (d.fuelAmount||0) : 0 };
-  }
-  return { cash:0, card:0 };
-}
-async function loadPayoutList(){
-  // Driver view only sees entries from their own tenure onward; owner always sees everything.
-  let query = db.collection("vehicles").doc(CAR_ID).collection("entries");
-  if(currentUser === "driver" && driverStartDate){
-    query = query.where("date", ">=", driverStartDate);
-  }
-  const snap = await query.orderBy("date","desc").limit(90).get();
-  const list = document.getElementById("payoutList");
-  list.innerHTML = "";
-  let outstanding = 0;
-  if(snap.empty){
-    list.innerHTML = `<div class="empty">${tr("noEntries")}</div>`;
-    document.getElementById("outstandingAmt").textContent = fmt(0);
-    return;
-  }
-  snap.forEach(doc=>{
-    const d = doc.data();
-    if(d.leave){
-      list.appendChild(renderLeaveItem(d));
-      return;
-    }
-    const pending = d.unpaidAmount!==undefined ? d.unpaidAmount : (d.payStatus==="unpaid" ? (d.ownerAmount||0) : 0);
-    if(pending > 0.5) outstanding += pending;
-    list.appendChild(renderPayoutItem(d, doc.id));
-  });
-  document.getElementById("outstandingAmt").textContent = fmt(outstanding);
-}
-function dateLabel(d){
-  const {start, end} = entryDateTimeRange(d);
-  const hasTime = d.isRange || (d.shiftStartTime && d.shiftEndTime);
-  if(!hasTime) return d.date;
-  const dur = durationLabel(start, end);
-  return `${fmtDateTime(start)} → ${fmtDateTime(end)}${dur ? ` (${dur})` : ""}`;
-}
-function renderLeaveItem(d){
-  const div = document.createElement("div");
-  div.className = "history-item";
-  div.innerHTML = `<div class="top"><span class="date">${d.date}</span><span class="badge leave">${tr("leaveTag")}</span></div>`;
-  return div;
-}
-function renderPayoutItem(d, id){
-  const div = document.createElement("div");
-  div.className = "history-item";
-  const pending = d.unpaidAmount!==undefined ? d.unpaidAmount : (d.payStatus==="unpaid" ? (d.ownerAmount||0) : 0);
-  let statusBadge;
-  if(d.payStatus==="paid" && pending <= 0.5){
-    statusBadge = `<span class="badge paid">${tr("paid")}</span>`;
-  } else if(d.payStatus==="paid" && pending > 0.5){
-    statusBadge = `<span class="badge" style="background:rgba(245,158,11,0.15); color:#f59e0b;">Partial</span>`;
-  } else {
-    statusBadge = `<span class="badge unpaid">${tr("unpaid")}</span>`;
-  }
-  // Drivers can view but not edit entries in the payout list — only the owner opens the edit modal.
-  const clickable = currentUser === "owner";
-  const onclickAttr = clickable ? `onclick="openEditModal('${id}')" style="cursor:pointer;"` : "";
-  div.innerHTML = `
-    <div class="top" ${onclickAttr}>
-      <span class="date">${dateLabel(d)}</span>
-      ${statusBadge}
+<!-- ============ LOGIN SCREEN ============ -->
+<div id="loginScreen" class="screen active">
+  <div class="login-wrap">
+    <div class="login-card">
+      <div class="emoji">🚖</div>
+      <h1 id="t_appname">வாடகை டாக்ஸி கணக்கு</h1>
+      <p id="t_tagline">Taxi Revenue & Payout Tracker</p>
+      <div class="role-pick">
+        <button id="roleOwnerBtn" class="sel" onclick="selectRole('owner')">
+          <span class="e">👤</span><span id="t_owner">Owner</span>
+        </button>
+        <button id="roleDriverBtn" onclick="selectRole('driver')">
+          <span class="e">🚗</span><span id="t_driver">Driver</span>
+        </button>
+      </div>
+      <input type="password" id="pinInput" placeholder="Enter PIN" inputmode="numeric" maxlength="6">
+      <div class="err" id="loginErr" style="display:none;"></div>
+      <button class="btn" onclick="doLogin()" id="t_login">Login</button>
+      <div class="lang-toggle" style="justify-content:center; margin-top:18px;">
+        <button id="langTaBtn" onclick="setLang('ta')">தமிழ்</button>
+        <button id="langEnBtn" class="on" onclick="setLang('en')">English</button>
+      </div>
     </div>
-    <div class="sub" ${onclickAttr}>
-      <span>${tr("revenue")}: ${fmt(d.totalRevenue)}</span>
-      <span>${tr("salary")}: ${fmt(d.driverSalary)}</span>
-      <span>${tr("owneramount")}: ${fmt(d.ownerAmount)}</span>
-      ${d.payStatus==="paid" ? `<span>${tr("cashpaid")}: ${fmt(d.cashPaid)}</span><span>${tr("upipaid")}: ${fmt(d.upiPaid)}</span>` : ""}
-      ${pending > 0.5 ? `<span style="color:var(--red);">Pending: ${fmt(pending)}</span>` : ""}
+  </div>
+</div>
+
+<!-- ============ MAIN APP ============ -->
+<div id="mainApp" style="display:none;">
+  <div class="app-header">
+    <div class="title">
+      <span id="headerTitle">Dashboard</span>
+      <small id="headerSub"></small>
     </div>
-    <div class="actions">
-      <button class="share-btn" onclick="event.stopPropagation(); shareEntry('${id}')">📤 ${tr("share")}</button>
-    </div>`;
-  return div;
-}
-function closeModal(){ document.getElementById("editModalBg").classList.remove("show"); }
-async function openEditModal(id){
-  if(currentUser !== "owner") return; // owner-only, defense in depth alongside the UI gate above
-  const doc = await entriesDocById(id).get();
-  if(!doc.exists) return;
-  const d = doc.data();
-  const fc = fuelCashCard(d);
-  const expTotal = d.otherExpTotal!==undefined ? d.otherExpTotal : (Array.isArray(d.otherExpenses) ? d.otherExpenses.reduce((s,e)=>s+(e.amount||0),0) : 0);
-  const expRowsHtml = (d.otherExpenses||[]).map(e=>`<div class="row"><span class="lbl">— ${e.desc||tr("otherexp")}</span><span class="val">${fmt(e.amount)}</span></div>`).join("");
-  const content = document.getElementById("editModalContent");
-  content.innerHTML = `
-    <h3 style="margin-bottom:14px;">${dateLabel(d)}</h3>
-    <div class="row"><span class="lbl">${tr("totalrev")}</span><span class="val">${fmt(d.totalRevenue)}</span></div>
-    <div class="row"><span class="lbl">${tr("fuelcash")}</span><span class="val">${fmt(fc.cash)}</span></div>
-    <div class="row"><span class="lbl">${tr("fuelcard")}</span><span class="val">${fmt(fc.card)}</span></div>
-    <div class="row"><span class="lbl">${tr("parking")}</span><span class="val">${fmt(d.parking)}</span></div>
-    <div class="row"><span class="lbl">${tr("tollbill")}</span><span class="val">${fmt(d.tollCharge!==undefined ? d.tollCharge : (d.tollBill!==undefined ? Math.round((d.tollBill/(1+TOLL_GST_PCT))*100)/100 : 0))} (+GST = ${fmt(d.tollBillTotal!==undefined ? d.tollBillTotal : d.tollBill)})</span></div>
-    <div class="row"><span class="lbl">${tr("tollcollected")}</span><span class="val">${fmt(d.tollCollected)}</span></div>
-    ${expRowsHtml}
-    <div class="row"><span class="lbl">${tr("otherexptotal")}</span><span class="val">${fmt(expTotal)}</span></div>
-    <div class="row"><span class="lbl">${tr("salary30")}</span><span class="val">${fmt(d.driverSalary)}</span></div>
-    <div class="divider"></div>
-    <div class="row"><span class="lbl" style="color:var(--accent2)">${tr("owneramt")}</span><span class="val" style="color:var(--accent2)">${fmt(d.ownerAmount)}</span></div>
-    <div class="divider"></div>
-    <label>${tr("paysec")}</label>
-    <select id="modalPayStatus">
-      <option value="unpaid" ${d.payStatus==="unpaid"?"selected":""}>${tr("unpaid")}</option>
-      <option value="paid" ${d.payStatus==="paid"?"selected":""}>${tr("paid")}</option>
-    </select>
-    <div class="pay-split">
-      <div style="flex:1;"><label>${tr("cashpaid")}</label><input type="number" id="modalCash" value="${d.cashPaid||0}"></div>
-      <div style="flex:1;"><label>${tr("upipaid")}</label><input type="number" id="modalUpi" value="${d.upiPaid||0}"></div>
+    <div style="display:flex; gap:8px; align-items:center;">
+      <div class="lang-toggle">
+        <button id="langTaBtn2" onclick="setLang('ta')">த</button>
+        <button id="langEnBtn2" class="on" onclick="setLang('en')">EN</button>
+      </div>
+      <button class="icon-btn" onclick="logout()">⎋</button>
     </div>
-    <button class="btn" style="margin-top:10px;" onclick="saveModalPayment('${id}')">${tr("saveentry")}</button>
-    <button class="btn secondary" style="margin-top:10px;" onclick="shareEntry('${id}')">📤 ${tr("share")}</button>
-    <button class="btn outline-red" style="margin-top:10px; background:transparent;" onclick="deleteEntry('${id}')">${tr("delete")}</button>
-  `;
-  document.getElementById("editModalBg").classList.add("show");
-}
-async function saveModalPayment(id){
-  const payStatus = document.getElementById("modalPayStatus").value;
-  const cashPaid = Number(document.getElementById("modalCash").value)||0;
-  const upiPaid = Number(document.getElementById("modalUpi").value)||0;
-  const doc = await entriesDocById(id).get();
-  const ownerAmount = doc.exists ? (doc.data().ownerAmount||0) : 0;
-  const unpaidAmount = payStatus==="paid" ? Math.max(Math.round(ownerAmount - cashPaid - upiPaid), 0) : ownerAmount;
-  await entriesDocById(id).set({payStatus, cashPaid: payStatus==="paid"?cashPaid:0, upiPaid: payStatus==="paid"?upiPaid:0, unpaidAmount}, {merge:true});
-  closeModal();
-  showToast(tr("savedOk"));
-  loadPayoutList();
-  if(activeTab==="dash") loadDashboard();
-}
-async function deleteEntry(id){
-  if(!confirm(tr("confirmDelete"))) return;
-  await entriesDocById(id).delete();
-  closeModal();
-  loadPayoutList();
-}
+  </div>
 
-/* ===================== SHARE PAYOUT AS IMAGE (WhatsApp) ===================== */
-function buildShareReceipt(d, dateText){
-  const fc = fuelCashCard(d);
-  const expTotal = d.otherExpTotal!==undefined ? d.otherExpTotal : (Array.isArray(d.otherExpenses) ? d.otherExpenses.reduce((s,e)=>s+(e.amount||0),0) : 0);
-  const statusBg = d.payStatus==="paid" ? "background:#dcfce7;color:#16a34a;" : "background:#fee2e2;color:#dc2626;";
-  const statusText = d.payStatus==="paid" ? tr("paid") : tr("unpaid");
-  const cashPaid = d.cashPaid||0, upiPaid = d.upiPaid||0;
-  const handoverRows = d.payStatus==="paid"
-    ? `${cashPaid>0?`<div class="sr-row"><span>${tr("cashpaid")}</span><span>${fmt(cashPaid)}</span></div>`:""}
-       ${upiPaid>0?`<div class="sr-row"><span>${tr("upipaid")}</span><span>${fmt(upiPaid)}</span></div>`:""}`
-    : "";
-  const node = document.getElementById("shareReceipt");
-  node.innerHTML = `
-    <div class="sr-head">
-      <div class="sr-app">🚖 ${tr("appname")}</div>
-      <div class="sr-date">${dateText}</div>
+  <!-- DRIVER: Daily Entry -->
+  <div id="screen_entry" class="screen">
+    <div class="card">
+      <div class="export-toggle" id="entryModeToggle">
+        <button type="button" class="on" id="entryModeSingleBtn" onclick="setEntryMode('single')">Single Day</button>
+        <button type="button" id="entryModeRangeBtn" onclick="setEntryMode('range')">Date Range</button>
+      </div>
+
+      <div id="singleDateFields">
+        <label id="t_date">Date</label>
+        <input type="date" id="entDate">
+        <div class="grid2">
+          <div><label id="t_shiftstart">Shift Start Time</label><input type="time" id="entStartTime"></div>
+          <div><label id="t_shiftend">Shift End Time</label><input type="time" id="entEndTime"></div>
+        </div>
+        <div class="muted-small" id="t_shifttimehint">Optional, but helps avoid mix-ups if a multi-day range also touches this date.</div>
+
+        <div class="row" style="margin-top:6px;">
+          <span id="t_leave" class="lbl">Mark today as Leave</span>
+          <input type="checkbox" id="leaveToggle" onchange="toggleLeaveMode()" style="width:20px;height:20px;">
+        </div>
+      </div>
+
+      <div id="rangeDateFields" style="display:none;">
+        <label id="t_fromdatetime">From</label>
+        <div class="grid2">
+          <input type="date" id="entFromDate">
+          <input type="time" id="entFromTime">
+        </div>
+        <label id="t_todatetime" style="margin-top:10px; display:block;">To</label>
+        <div class="grid2">
+          <input type="date" id="entToDate">
+          <input type="time" id="entToTime">
+        </div>
+        <div class="muted-small" style="margin-top:2px;">Enter combined totals for the whole period below — e.g. total Trip Payment for all the days together.</div>
+      </div>
+
+      <div class="muted-small" id="entryBlockedMsg" style="display:none; color:var(--red);">This date is from before your start — ask the owner if you need it changed.</div>
     </div>
-    <div class="sr-row"><span>${tr("srTripRev")}</span><span>${fmt(d.tripPayment||0)}</span></div>
-    <div class="sr-row"><span>${tr("srOnline")}</span><span>−${fmt(d.onlinePayment)}</span></div>
-    <div class="sr-row"><span>${tr("srSalary")}</span><span>−${fmt(d.driverSalary)}</span></div>
-    <div class="sr-row"><span>${tr("srFuelCash")}</span><span>−${fmt(fc.cash)}</span></div>
-    <div class="sr-row"><span>${tr("srParking")}</span><span>−${fmt(d.parking)}</span></div>
-    <div class="sr-row"><span>${tr("srOtherExp")}</span><span>−${fmt(expTotal)}</span></div>
-    <div class="sr-row"><span>${tr("srTollCollected")}</span><span>+${fmt(d.tollCollected)}</span></div>
-    <div class="sr-final"><span>${tr("owneramt")}</span><span>${fmt(d.ownerAmount)}</span></div>
-    <div class="sr-status" style="${statusBg}">${statusText}</div>
-    ${handoverRows ? `<div class="sr-handover-title">${tr("srHandover")}</div>${handoverRows}` : ""}
-  `;
-}
-async function shareEntry(id){
-  if(typeof html2canvas === "undefined"){ showToast(tr("shareFailed")); return; }
-  const doc = await entriesDocById(id).get();
-  if(!doc.exists) return;
-  const d = doc.data();
-  if(d.leave) return;
-  const label = dateLabel(d);
-  buildShareReceipt(d, label);
-  const node = document.getElementById("shareReceipt");
-  try{
-    const canvas = await html2canvas(node, {backgroundColor:"#ffffff", scale:2});
-    canvas.toBlob(async (blob)=>{
-      if(!blob){ showToast(tr("shareFailed")); return; }
-      const file = new File([blob], `payout-${id}.png`, {type:"image/png"});
-      if(navigator.canShare && navigator.canShare({files:[file]})){
-        try{
-          await navigator.share({files:[file], title: tr("shareReceiptTitle"), text: `${tr("owneramt")}: ${fmt(d.ownerAmount)} (${label})`});
-        }catch(e){ /* user cancelled share sheet — not an error */ }
-      } else {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url; a.download = `payout-${id}.png`; a.click();
-        URL.revokeObjectURL(url);
-        showToast(tr("shareFallback"));
-      }
-    }, "image/png");
-  }catch(e){
-    showToast(tr("shareFailed"));
-  }
-}
 
-/* ===================== MAINTENANCE TAB ===================== */
-function initMaintScreen(){
-  const monthInput = document.getElementById("maintMonth");
-  if(!monthInput.value) monthInput.value = new Date().toISOString().slice(0,7);
-  loadMaintenance();
-  const upiIdEl = document.getElementById("upiIdInput");
-  const upiNameEl = document.getElementById("upiPayeeNameInput");
-  if(upiIdEl) upiIdEl.value = ownerUpiId || "";
-  if(upiNameEl) upiNameEl.value = ownerUpiName || "";
-}
-async function saveUpiSettings(){
-  const upiId = document.getElementById("upiIdInput").value.trim();
-  const upiPayeeName = document.getElementById("upiPayeeNameInput").value.trim();
-  if(!upiId){ showToast(tr("fillRequired")); return; }
-  await db.collection("settings").doc("pins").set({upiId, upiPayeeName}, {merge:true});
-  ownerUpiId = upiId;
-  ownerUpiName = upiPayeeName;
-  showToast(tr("savedOk"));
-}
-function payViaUpi(){
-  if(!ownerUpiId){
-    showToast("Owner hasn't set up a UPI ID yet");
-    return;
-  }
-  const params = new URLSearchParams({
-    pa: ownerUpiId,
-    pn: ownerUpiName || tr("owner"),
-    cu: "INR"
-  });
-  window.location.href = `upi://pay?${params.toString()}`;
-}
-async function loadMaintenance(){
-  const month = document.getElementById("maintMonth").value;
-  const doc = await maintDocRef(month).get();
-  const d = doc.exists ? doc.data() : {};
-  ["emi","insurance","tyre","redtaxi","budget","actual","others"].forEach(k=>{
-    document.getElementById("m_"+k).value = d[k] !== undefined ? d[k] : "";
-  });
-  document.getElementById("m_startKm").value = d.startKm !== undefined ? d.startKm : "";
-  document.getElementById("m_endKm").value = d.endKm !== undefined ? d.endKm : "";
-  document.getElementById("m_notes").value = d.notes || "";
-}
-async function saveMaintenance(){
-  const month = document.getElementById("maintMonth").value;
-  const payload = {};
-  ["emi","insurance","tyre","redtaxi","budget","actual","others"].forEach(k=>{
-    payload[k] = Number(document.getElementById("m_"+k).value)||0;
-  });
-  payload.startKm = Number(document.getElementById("m_startKm").value)||0;
-  payload.endKm = Number(document.getElementById("m_endKm").value)||0;
-  payload.notes = document.getElementById("m_notes").value || "";
-  payload.month = month;
-  await maintDocRef(month).set(payload, {merge:true});
-  showToast(tr("savedOk"));
-  if(activeTab==="dash") loadDashboard();
-}
+    <div id="entryFields">
+      <div class="card">
+        <div class="section-title" id="t_revsec">Revenue</div>
+        <label id="t_trip">Trip Payment (Total Fare, as per bill)</label>
+        <input type="number" id="tripPayment" placeholder="0">
+        <label id="t_online">Online / RedTaxi Credit</label>
+        <input type="number" id="onlinePayment" placeholder="0">
+        <label id="t_tollbill">Toll Charges (as per bill)</label>
+        <input type="number" id="tollCharge" placeholder="0">
+        <div class="muted-small" id="tollGstReadout">Incl. GST 5%: ₹0</div>
+        <div class="muted-small" id="t_tollbillhint">Enter the base Toll Charges line from the customer's bill (not the GST line) — the app adds 5% GST automatically and excludes the total only when calculating driver salary.</div>
+      </div>
 
-/* ===================== DASHBOARD ===================== */
-function initDashboardScreen(){
-  const rangeFromDate = document.getElementById("dashRangeFromDate");
-  const rangeFromTime = document.getElementById("dashRangeFromTime");
-  const rangeToDate = document.getElementById("dashRangeToDate");
-  const rangeToTime = document.getElementById("dashRangeToTime");
-  const monthPicker = document.getElementById("dashMonthPicker");
-  if(!rangeFromDate.value){ rangeFromDate.value = todayStr(); rangeFromTime.value = "00:00"; }
-  if(!rangeToDate.value){ rangeToDate.value = todayStr(); rangeToTime.value = "23:59"; }
-  if(!monthPicker.value) monthPicker.value = todayStr().slice(0,7);
-  const refreshRange = ()=> loadDashboardRange(
-    combineDT(rangeFromDate.value, rangeFromTime.value, "00:00"),
-    combineDT(rangeToDate.value, rangeToTime.value, "23:59")
-  );
-  [rangeFromDate, rangeFromTime, rangeToDate, rangeToTime].forEach(el=> el.onchange = refreshRange);
-  monthPicker.onchange = ()=> loadDashboardMonth(monthPicker.value);
+      <div class="card">
+        <div class="section-title" id="t_expsec">Expenses</div>
+        <div class="grid2">
+          <div><label id="t_fuelcash">Fuel (Cash)</label><input type="number" id="fuelCash" placeholder="0"></div>
+          <div><label id="t_fuelcard">Fuel (Card)</label><input type="number" id="fuelCard" placeholder="0"></div>
+        </div>
+        <div class="grid2">
+          <div><label id="t_parking">Parking (cash)</label><input type="number" id="parking" placeholder="0"></div>
+          <div><label id="t_tollcollected">Toll Collected (FASTag)</label><input type="number" id="tollCollected" placeholder="0"></div>
+        </div>
 
-  const expStart = document.getElementById("expStartDate");
-  const expEnd = document.getElementById("expEndDate");
-  const expStartTime = document.getElementById("expStartTime");
-  const expEndTime = document.getElementById("expEndTime");
-  const expMonth = document.getElementById("expMonth");
-  if(!expStart.value){ expStart.value = todayStr(); expStartTime.value = "00:00"; }
-  if(!expEnd.value){ expEnd.value = todayStr(); expEndTime.value = "23:59"; }
-  if(!expMonth.value) expMonth.value = todayStr().slice(0,7);
+        <label id="t_otherexp" style="margin-top:16px;">Other Expenses</label>
+        <div id="otherExpList"></div>
+        <button type="button" class="btn-add-exp" onclick="addExpenseRow()">+ <span id="t_addexpense">Add Expense</span></button>
+        <div class="exp-total-row"><span id="t_otherexptotal">Other Expenses Total</span><span id="otherExpTotalVal">₹0</span></div>
+      </div>
 
-  refreshRange();
-  loadDashboardMonth(monthPicker.value);
-}
-async function loadDashboard(){
-  initDashboardScreen();
-}
-// Aggregates every saved entry (single-day or multi-day range) whose time window
-// overlaps the owner's chosen [fromDT, toDT) window — not just entries that start inside it.
-async function loadDashboardRange(fromDT, toDT){
-  if(!fromDT || !toDT || toDT <= fromDT) return;
-  const fromDate = dtToDateOnly(fromDT), toDate = dtToDateOnly(toDT);
-  const snap = await db.collection("vehicles").doc(CAR_ID).collection("entries")
-    .where("date", ">=", addDaysToDateStr(fromDate,-1))
-    .where("date", "<=", addDaysToDateStr(toDate,1)).get();
+      <div class="card" id="liveCalcCard">
+        <div class="section-title" id="t_calcsec">Auto Calculated</div>
+        <div class="row"><span class="lbl" id="t_totalrev">Total Revenue</span><span class="val" id="calcRevenue">₹0</span></div>
+        <div class="row"><span class="lbl" id="t_salary30">Driver Salary (30%)</span><span class="val" id="calcSalary">₹0</span></div>
+        <div class="muted-small" id="t_salarybasehint" style="margin-top:-6px;">Calculated on Total Revenue minus Toll-in-Bill</div>
+        <div class="divider"></div>
+        <div class="row"><span class="lbl" id="t_addtoll">+ Toll Collected (FASTag)</span><span class="val" id="calcTollCollected" style="color:var(--green);">₹0</span></div>
+        <div class="row"><span class="lbl" id="t_deduct">− Online, Fuel(Cash), Parking, Other Exp.</span><span class="val" id="calcDeduct" style="color:var(--red);">₹0</span></div>
+        <div class="divider"></div>
+        <div class="row"><span class="lbl" id="t_owneramt">Owner Amount</span><span class="val" style="color:var(--accent2); font-size:17px;" id="calcOwnerAmt">₹0</span></div>
+      </div>
+    </div>
 
-  let rev=0, fuel=0, salary=0, owner=0, anyEntry=false, allLeave=true, lastStatus=null;
-  snap.forEach(doc=>{
-    const d = doc.data();
-    const {start, end} = entryDateTimeRange(d);
-    if(!rangesOverlap(fromDT, toDT, start, end)) return;
-    anyEntry = true;
-    if(d.leave) return;
-    allLeave = false;
-    const fc = fuelCashCard(d);
-    rev += d.totalRevenue||0;
-    fuel += fc.cash + fc.card;
-    salary += d.driverSalary||0;
-    owner += d.ownerAmount||0;
-    lastStatus = d.payStatus;
-  });
+    <div class="card">
+      <div class="section-title" id="t_paysec">Owner Payment Status</div>
+      <select id="payStatus" onchange="togglePaySplit()">
+        <option value="unpaid" id="t_unpaid">Unpaid</option>
+        <option value="paid" id="t_paid">Paid</option>
+      </select>
+      <div id="paySplitFields" style="display:none;">
+        <div class="pay-split">
+          <div style="flex:1;"><label id="t_cashpaid">Cash Paid</label><input type="number" id="cashPaid" placeholder="0"></div>
+          <div style="flex:1;"><label id="t_upipaid">UPI Paid</label><input type="number" id="upiPaid" placeholder="0"></div>
+        </div>
+        <div id="payUpiWrap" style="margin-top:10px;">
+          <button class="btn secondary" onclick="payViaUpi()">📱 Pay via UPI</button>
+        </div>
+      </div>
+    </div>
 
-  document.getElementById("d_todayRev").textContent = fmt(rev);
-  document.getElementById("d_todayFuel").textContent = fmt(fuel);
-  document.getElementById("d_todaySalary").textContent = fmt(salary);
-  document.getElementById("d_todayOwner").textContent = fmt(owner);
-  if(!anyEntry){
-    document.getElementById("d_todayStatus").innerHTML = `<span class="badge unpaid">${tr("noEntries")}</span>`;
-  } else if(allLeave){
-    document.getElementById("d_todayStatus").innerHTML = `<span class="badge leave">${tr("leaveTag")}</span>`;
-  } else {
-    document.getElementById("d_todayStatus").innerHTML = lastStatus==="paid"
-      ? `<span class="badge paid">${tr("paid")}</span>` : `<span class="badge unpaid">${tr("unpaid")}</span>`;
-  }
-}
-async function loadDashboardMonth(month){
-  const snap = await db.collection("vehicles").doc(CAR_ID).collection("entries")
-    .where("date",">=", month+"-01").where("date","<=", month+"-31").get();
-  let mRev=0, mFuel=0, mSalary=0, mPaid=0, mPaidCash=0, mPaidUpi=0, mUnpaid=0;
-  snap.forEach(doc=>{
-    const d = doc.data();
-    if(d.leave) return;
-    const fc = fuelCashCard(d);
-    mRev += d.totalRevenue||0;
-    mFuel += fc.cash + fc.card;
-    mSalary += d.driverSalary||0;
-    if(d.payStatus==="paid"){
-      mPaid += (d.cashPaid||0)+(d.upiPaid||0);
-      mPaidCash += d.cashPaid||0;
-      mPaidUpi += d.upiPaid||0;
-    } else {
-      mUnpaid += (d.ownerAmount||0) - (d.cashPaid||0) - (d.upiPaid||0);
-    }
-  });
+    <button class="btn" onclick="saveEntry()" id="t_saveentry" style="margin-bottom:20px;">Save Entry</button>
+  </div>
 
-  const maintDoc = await maintDocRef(month).get();
-  const md = maintDoc.exists ? maintDoc.data() : {};
-  const comm = md.redtaxi||0;
-  const fixedCosts = (md.emi||0)+(md.insurance||0)+(md.tyre||0)+(md.actual||0)+(md.others||0);
-  const kmTotal = Math.max((md.endKm||0)-(md.startKm||0), 0);
-  const profit = mRev - mSalary - mFuel - comm - fixedCosts;
+  <!-- PAYOUT DETAILS TAB -->
+  <div id="screen_payout" class="screen">
+    <div class="card">
+      <div class="row">
+        <span class="lbl" id="t_outstanding">Total Outstanding (Unpaid)</span>
+        <span class="val" style="color:var(--red); font-size:16px;" id="outstandingAmt">₹0</span>
+      </div>
+    </div>
+    <div id="payoutList"></div>
+  </div>
 
-  document.getElementById("d_mRev").textContent = fmt(mRev);
-  document.getElementById("d_mKm").textContent = kmTotal;
-  document.getElementById("d_mFuel").textContent = fmt(mFuel);
-  document.getElementById("d_mSalary").textContent = fmt(mSalary);
-  document.getElementById("d_mComm").textContent = fmt(comm);
-  document.getElementById("d_mFixed").textContent = fmt(fixedCosts);
-  const profitEl = document.getElementById("d_mProfit");
-  profitEl.textContent = fmt(profit);
-  profitEl.className = "val " + (profit>=0?"profit-pos":"profit-neg");
-  document.getElementById("d_mPaid").textContent = fmt(mPaid);
-  document.getElementById("d_mPaidCash").textContent = fmt(mPaidCash);
-  document.getElementById("d_mPaidUpi").textContent = fmt(mPaidUpi);
-  document.getElementById("d_mUnpaid").textContent = fmt(mUnpaid);
-}
+  <!-- MAINTENANCE TAB -->
+  <div id="screen_maint" class="screen">
+    <div class="card">
+      <label id="t_monthpick">Month</label>
+      <input type="month" id="maintMonth" onchange="loadMaintenance()">
+    </div>
+    <div class="card">
+      <div class="section-title" id="t_kmsec">Kilometers</div>
+      <div class="grid2">
+        <div><label id="t_startkm">Start KM</label><input type="number" id="m_startKm" placeholder="0"></div>
+        <div><label id="t_endkm">End KM</label><input type="number" id="m_endKm" placeholder="0"></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="grid2">
+        <div><label>EMI</label><input type="number" id="m_emi" placeholder="0"></div>
+        <div><label id="t_insurance">Insurance</label><input type="number" id="m_insurance" placeholder="0"></div>
+        <div><label id="t_tyre">Tyre Cost</label><input type="number" id="m_tyre" placeholder="0"></div>
+        <div><label id="t_redcomm">RedTaxi Commission</label><input type="number" id="m_redtaxi" placeholder="0"></div>
+        <div><label id="t_maintbudget">Maintenance (Budget)</label><input type="number" id="m_budget" placeholder="0"></div>
+        <div><label id="t_maintactual">Actual Maintenance</label><input type="number" id="m_actual" placeholder="0"></div>
+        <div><label id="t_others">Others</label><input type="number" id="m_others" placeholder="0"></div>
+      </div>
+      <label id="t_notes">Notes</label>
+      <input type="text" id="m_notes" placeholder="e.g. tyre puncture, service center">
+      <button class="btn" style="margin-top:6px;" onclick="saveMaintenance()" id="t_savemaint">Save Maintenance</button>
+    </div>
+    <div class="muted-small" id="t_commhint">RedTaxi settles commission 3x/month: 1–10 (paid 13th), 11–20 (paid 23rd), 21–end (paid 3rd next month). Enter the total commission for the month here.</div>
 
-/* ===================== REPORTS & EXPORT (PDF / Excel) ===================== */
-let exportMode = "daily";
-function setExportMode(mode){
-  exportMode = mode;
-  document.getElementById("expModeDaily").classList.toggle("on", mode==="daily");
-  document.getElementById("expModeMonthly").classList.toggle("on", mode==="monthly");
-  document.getElementById("exportDailyFields").style.display = mode==="daily" ? "block":"none";
-  document.getElementById("exportMonthlyFields").style.display = mode==="monthly" ? "block":"none";
-}
-async function fetchReportEntries(){
-  let startDate, endDate, startDT, endDT, titleStart, titleEnd;
-  if(exportMode==="daily"){
-    startDT = combineDT(document.getElementById("expStartDate").value, document.getElementById("expStartTime").value, "00:00");
-    endDT = combineDT(document.getElementById("expEndDate").value, document.getElementById("expEndTime").value, "23:59");
-    if(!startDT || !endDT || endDT <= startDT){ showToast(tr("fillRequired")); return null; }
-    startDate = dtToDateOnly(startDT); endDate = dtToDateOnly(endDT);
-    titleStart = fmtDateTime(startDT); titleEnd = fmtDateTime(endDT);
-  } else {
-    const month = document.getElementById("expMonth").value;
-    if(!month){ showToast(tr("fillRequired")); return null; }
-    startDate = month+"-01"; endDate = month+"-31";
-    startDT = startDate+"T00:00"; endDT = endDate+"T23:59";
-    titleStart = startDate; titleEnd = endDate;
-  }
-  const snap = await db.collection("vehicles").doc(CAR_ID).collection("entries")
-    .where("date",">=",addDaysToDateStr(startDate,-1)).where("date","<=",addDaysToDateStr(endDate,1))
-    .orderBy("date","asc").get();
-  const rows = [];
-  snap.forEach(doc=>{
-    const d = doc.data();
-    const {start, end} = entryDateTimeRange(d);
-    if(!rangesOverlap(startDT, endDT, start, end)) return;
-    if(d.leave){
-      rows.push({date:dateLabel(d), leave:true});
-      return;
-    }
-    const fc = fuelCashCard(d);
-    const expTotal = d.otherExpTotal!==undefined ? d.otherExpTotal : (Array.isArray(d.otherExpenses)?d.otherExpenses.reduce((s,e)=>s+(e.amount||0),0):0);
-    rows.push({
-      date:dateLabel(d), leave:false,
-      revenue:d.totalRevenue||0, salary:d.driverSalary||0,
-      fuelCash:fc.cash, fuelCard:fc.card, parking:d.parking||0,
-      tollCharge: d.tollCharge!==undefined?d.tollCharge:0,
-      tollBillTotal: d.tollBillTotal!==undefined?d.tollBillTotal:(d.tollBill||0),
-      tollCollected:d.tollCollected||0, otherExp:expTotal,
-      ownerAmount:d.ownerAmount||0, payStatus:d.payStatus||"unpaid",
-      cashPaid:d.cashPaid||0, upiPaid:d.upiPaid||0,
-    });
-  });
-  return {rows, startDate:titleStart, endDate:titleEnd, fileTag: exportMode==="daily" ? `${startDate}_to_${endDate}` : startDate.slice(0,7)};
-}
-function reportTotals(rows){
-  const t = {revenue:0,salary:0,fuelCash:0,fuelCard:0,parking:0,tollCollected:0,otherExp:0,ownerAmount:0,cashPaid:0,upiPaid:0};
-  rows.forEach(r=>{
-    if(r.leave) return;
-    t.revenue+=r.revenue; t.salary+=r.salary; t.fuelCash+=r.fuelCash; t.fuelCard+=r.fuelCard;
-    t.parking+=r.parking; t.tollCollected+=r.tollCollected; t.otherExp+=r.otherExp;
-    t.ownerAmount+=r.ownerAmount; t.cashPaid+=r.cashPaid; t.upiPaid+=r.upiPaid;
-  });
-  return t;
-}
-async function exportReport(kind){
-  const result = await fetchReportEntries();
-  if(!result) return;
-  const {rows, startDate, endDate, fileTag} = result;
-  if(!rows.length){ showToast(tr("noEntries")); return; }
-  const totals = reportTotals(rows);
-  const title = exportMode==="daily" ? `${startDate} to ${endDate}` : startDate;
-  if(kind==="pdf") exportReportPDF(rows, totals, title, fileTag);
-  else exportReportExcel(rows, totals, title, fileTag);
-}
-function exportReportPDF(rows, totals, title, fileTag){
-  if(typeof window.jspdf === "undefined"){ showToast(tr("shareFailed")); return; }
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({orientation:"landscape", unit:"pt"});
-  doc.setFontSize(14);
-  doc.text(`${tr("appname")} — ${tr("headerDash")} (${title})`, 30, 30);
+    <div class="card" style="margin-top:12px; margin-bottom:24px;">
+      <div class="section-title">Payment Settings</div>
+      <label>Your UPI ID (to receive driver payouts)</label>
+      <input type="text" id="upiIdInput" placeholder="yourname@okhdfcbank">
+      <label style="margin-top:10px;">Name shown to driver</label>
+      <input type="text" id="upiPayeeNameInput" placeholder="e.g. Naveen">
+      <button class="btn" style="margin-top:10px;" onclick="saveUpiSettings()">Save UPI Details</button>
+    </div>
+  </div>
 
-  const head = [["Date","Revenue","Salary","Fuel(Cash)","Fuel(Card)","Parking","Toll Collected","Other Exp","Owner Amt","Status","Cash Paid","UPI Paid"]];
-  const body = rows.map(r=> r.leave
-    ? [r.date, tr("leaveTag"),"","","","","","","","","",""]
-    : [r.date, r.revenue.toFixed(0), r.salary.toFixed(0), r.fuelCash.toFixed(0), r.fuelCard.toFixed(0),
-       r.parking.toFixed(0), r.tollCollected.toFixed(0), r.otherExp.toFixed(0), r.ownerAmount.toFixed(0),
-       r.payStatus, r.cashPaid.toFixed(0), r.upiPaid.toFixed(0)]
-  );
-  body.push(["TOTAL", totals.revenue.toFixed(0), totals.salary.toFixed(0), totals.fuelCash.toFixed(0),
-    totals.fuelCard.toFixed(0), totals.parking.toFixed(0), totals.tollCollected.toFixed(0),
-    totals.otherExp.toFixed(0), totals.ownerAmount.toFixed(0), "", totals.cashPaid.toFixed(0), totals.upiPaid.toFixed(0)]);
 
-  doc.autoTable({ head, body, startY: 45, styles:{fontSize:8}, headStyles:{fillColor:[245,158,11]},
-    footStyles:{fillColor:[30,41,59]}, didParseCell:(data)=>{
-      if(data.row.index === body.length-1) data.cell.styles.fontStyle = "bold";
-    }});
-  doc.save(`report-${(fileTag||title).replace(/\s+/g,"_")}.pdf`);
-}
-function exportReportExcel(rows, totals, title, fileTag){
-  if(typeof XLSX === "undefined"){ showToast(tr("shareFailed")); return; }
-  const data = rows.map(r=> r.leave
-    ? {Date:r.date, Status:tr("leaveTag")}
-    : {
-      Date:r.date, Revenue:r.revenue, "Driver Salary":r.salary,
-      "Fuel (Cash)":r.fuelCash, "Fuel (Card)":r.fuelCard, Parking:r.parking,
-      "Toll Charge (base)":r.tollCharge, "Toll (incl. GST)":r.tollBillTotal,
-      "Toll Collected":r.tollCollected, "Other Expenses":r.otherExp,
-      "Owner Amount":r.ownerAmount, "Pay Status":r.payStatus,
-      "Cash Paid":r.cashPaid, "UPI Paid":r.upiPaid,
-    }
-  );
-  data.push({
-    Date:"TOTAL", Revenue:totals.revenue, "Driver Salary":totals.salary,
-    "Fuel (Cash)":totals.fuelCash, "Fuel (Card)":totals.fuelCard, Parking:totals.parking,
-    "Toll Collected":totals.tollCollected, "Other Expenses":totals.otherExp,
-    "Owner Amount":totals.ownerAmount, "Cash Paid":totals.cashPaid, "UPI Paid":totals.upiPaid,
-  });
-  const ws = XLSX.utils.json_to_sheet(data);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Report");
-  XLSX.writeFile(wb, `report-${(fileTag||title).replace(/\s+/g,"_")}.xlsx`);
-}
+  <!-- DASHBOARD TAB -->
+  <div id="screen_dash" class="screen">
+    <div class="section-title" id="t_dashrange" style="margin:0 0 8px;">Selected Range</div>
+    <label id="t_rangefrom">From</label>
+    <div class="grid2">
+      <input type="date" id="dashRangeFromDate">
+      <input type="time" id="dashRangeFromTime">
+    </div>
+    <label id="t_rangeto" style="margin-top:10px; display:block;">To</label>
+    <div class="grid2">
+      <input type="date" id="dashRangeToDate">
+      <input type="time" id="dashRangeToTime">
+    </div>
+    <div class="stat-grid" style="margin-top:10px;">
+      <div class="stat"><div class="n" id="d_todayRev">₹0</div><div class="l" id="t_revenue">Revenue</div></div>
+      <div class="stat"><div class="n" id="d_todayFuel">₹0</div><div class="l" id="t_fuel">Fuel</div></div>
+      <div class="stat"><div class="n" id="d_todaySalary">₹0</div><div class="l" id="t_salary">Driver Salary</div></div>
+      <div class="stat"><div class="n" id="d_todayOwner">₹0</div><div class="l" id="t_owneramount">Owner Amount</div></div>
+    </div>
+    <div class="card" style="margin-bottom:18px;">
+      <div class="row"><span class="lbl" id="t_status">Status</span><span id="d_todayStatus">—</span></div>
+    </div>
 
-/* ===================== INIT / SERVICE WORKER ===================== */
-window.addEventListener("load", ()=>{
-  applyTranslations();
-  const savedRole = localStorage.getItem("taxiapp_role");
-  if(savedRole){
-    currentUser = savedRole;
-    auth.signInAnonymously().then(async ()=>{
-      const settingsDoc = await db.collection("settings").doc("pins").get();
-      if(savedRole === "driver"){
-        driverStartDate = (settingsDoc.exists && settingsDoc.data().driverStartDate) || null;
-      }
-      ownerUpiId = (settingsDoc.exists && settingsDoc.data().upiId) || null;
-      ownerUpiName = (settingsDoc.exists && settingsDoc.data().upiPayeeName) || null;
-      enterApp();
-    }).catch(()=>{
-      currentUser = null;
-    });
-  }
-  if("serviceWorker" in navigator){
-    navigator.serviceWorker.register("service-worker.js").then((reg)=>{
-      // If a new service worker is already waiting (found on this load), activate it now
-      if(reg.waiting) reg.waiting.postMessage("SKIP_WAITING");
+    <div class="dash-head-row">
+      <div class="section-title" id="t_thismonth" style="margin:0;">This Month</div>
+      <input type="month" id="dashMonthPicker" style="width:auto; margin:0;">
+    </div>
+    <div class="stat-grid">
+      <div class="stat"><div class="n" id="d_mRev">₹0</div><div class="l" id="t_totalrevenue">Total Revenue</div></div>
+      <div class="stat"><div class="n" id="d_mKm">0</div><div class="l" id="t_kmdriven">KM Driven</div></div>
+      <div class="stat"><div class="n" id="d_mFuel">₹0</div><div class="l" id="t_fuel">Fuel</div></div>
+      <div class="stat"><div class="n" id="d_mSalary">₹0</div><div class="l" id="t_salary">Driver Salary</div></div>
+      <div class="stat"><div class="n" id="d_mComm">₹0</div><div class="l" id="t_redcomm">RedTaxi Commission</div></div>
+      <div class="stat"><div class="n" id="d_mFixed">₹0</div><div class="l" id="t_fixedcosts">EMI+Ins+Tyre+Maint+Others</div></div>
+    </div>
+    <div class="card" style="margin-bottom:18px;">
+      <div class="row"><span class="lbl" id="t_profit">Profit</span><span class="val" id="d_mProfit" style="font-size:17px;">₹0</span></div>
+      <div class="divider"></div>
+      <div class="row"><span class="lbl" id="t_paidtotal">Owner Amount Paid</span><span class="val" id="d_mPaid">₹0</span></div>
+      <div class="row"><span class="lbl" id="t_paidcash">— Cash</span><span class="val" id="d_mPaidCash">₹0</span></div>
+      <div class="row"><span class="lbl" id="t_paidupi">— UPI</span><span class="val" id="d_mPaidUpi">₹0</span></div>
+      <div class="divider"></div>
+      <div class="row"><span class="lbl" id="t_unpaidtotal">Unpaid (Outstanding)</span><span class="val" id="d_mUnpaid" style="color:var(--red);">₹0</span></div>
+    </div>
 
-      // Watch for a new service worker being found (app updated on the server)
-      reg.addEventListener("updatefound", ()=>{
-        const newWorker = reg.installing;
-        if(!newWorker) return;
-        newWorker.addEventListener("statechange", ()=>{
-          if(newWorker.state === "installed" && navigator.serviceWorker.controller){
-            // New version installed and ready — activate it immediately, no driver action needed
-            newWorker.postMessage("SKIP_WAITING");
-          }
-        });
-      });
+    <div class="card" style="margin-bottom:24px;">
+      <div class="section-title" id="t_reportsec">Reports &amp; Export</div>
+      <div class="export-toggle">
+        <button type="button" class="on" id="expModeDaily" onclick="setExportMode('daily')"><span id="t_expdaily">Daily (Range)</span></button>
+        <button type="button" id="expModeMonthly" onclick="setExportMode('monthly')"><span id="t_expmonthly">Monthly</span></button>
+      </div>
 
-      // Periodically check for updates while the app is open (e.g. every 5 min)
-      setInterval(()=> reg.update().catch(()=>{}), 5*60*1000);
-      // Also check immediately whenever the app is brought to the foreground
-      document.addEventListener("visibilitychange", ()=>{
-        if(document.visibilityState === "visible") reg.update().catch(()=>{});
-      });
-    }).catch(()=>{});
+      <div id="exportDailyFields">
+        <label id="t_startdate">Start</label>
+        <div class="grid2">
+          <input type="date" id="expStartDate">
+          <input type="time" id="expStartTime">
+        </div>
+        <label id="t_enddate" style="margin-top:10px; display:block;">End</label>
+        <div class="grid2">
+          <input type="date" id="expEndDate">
+          <input type="time" id="expEndTime">
+        </div>
+      </div>
+      <div id="exportMonthlyFields" style="display:none;">
+        <label id="t_reportmonth">Month</label>
+        <input type="month" id="expMonth">
+      </div>
 
-    // Once the new service worker takes control, reload so the fresh app.js/index.html run.
-    // Deferred if the driver is actively on the entry form, so an unsaved entry isn't wiped —
-    // it reloads as soon as they switch tabs or the app is backgrounded instead.
-    let refreshing = false;
-    navigator.serviceWorker.addEventListener("controllerchange", ()=>{
-      if(refreshing) return;
-      refreshing = true;
-      if(activeTab === "entry"){ pendingReload = true; refreshing = false; return; }
-      window.location.reload();
-    });
-    document.addEventListener("visibilitychange", ()=>{
-      if(document.visibilityState === "hidden") maybeReload();
-    });
-  }
-});
+      <div class="grid2" style="margin-top:6px;">
+        <button type="button" class="btn secondary" onclick="exportReport('pdf')">📄 <span id="t_exportpdf">Export PDF</span></button>
+        <button type="button" class="btn secondary" onclick="exportReport('excel')">📊 <span id="t_exportexcel">Export Excel</span></button>
+      </div>
+    </div>
+  </div>
+
+  <div class="tabbar" id="tabbar"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- Edit modal -->
+<div class="modal-bg" id="editModalBg" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div id="editModalContent"></div>
+  </div>
+</div>
+
+<!-- Hidden receipt template captured as an image for WhatsApp sharing -->
+<div id="shareReceipt"></div>
+
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script defer src="app.js"></script>
+</body>
+</html>
