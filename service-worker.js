@@ -1,4 +1,4 @@
-const CACHE_NAME = "taxi-tracker-v3";
+const CACHE_NAME = "taxi-tracker-v4";
 const ASSETS = [
   "./index.html",
   "./app.js",
@@ -13,7 +13,12 @@ const APP_SHELL = ["index.html", "app.js"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS))
+    caches.open(CACHE_NAME).then((cache) =>
+      // cache.addAll fails the ENTIRE install if even one asset 404s (e.g. a missing
+      // icon) — which would leave this fixed service worker stuck and never activate.
+      // Caching each asset independently means one missing file can't sink the rest.
+      Promise.all(ASSETS.map((a) => cache.add(a).catch((e) => console.warn("SW precache skipped:", a, e))))
+    )
   );
   self.skipWaiting();
 });
@@ -54,12 +59,27 @@ self.addEventListener("fetch", (event) => {
   // CDN) can silently hand back a stale response even though we "fetched" it.
   if (isAppShellRequest(url, event.request.mode)) {
     const bustUrl = url + (url.includes("?") ? "&" : "?") + "_sw=" + Date.now();
+    const isNavigation = event.request.mode === "navigate";
     event.respondWith(
       fetch(bustUrl, { cache: "no-store" }).then((response) => {
+        // fetch() only rejects on true network failures — a 404/500 still "succeeds"
+        // as far as fetch() is concerned, so we must check .ok ourselves or a broken
+        // response (e.g. GitHub's 404 page) would get cached and served as if it were
+        // real app.js/index.html content.
+        if (!response.ok) throw new Error("Bad response " + response.status + " for " + bustUrl);
         const clone = response.clone();
         caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
         return response;
-      }).catch(() => caches.match(event.request).then((cached) => cached || caches.match("./index.html")))
+      }).catch(() =>
+        caches.match(event.request).then((cached) => {
+          if (cached) return cached;
+          // Only ever substitute the app shell page for an actual page load.
+          // Never for a script/asset request (e.g. app.js) — feeding it HTML
+          // instead breaks with "Uncaught SyntaxError: Unexpected token '<'".
+          if (isNavigation) return caches.match("./index.html");
+          return new Response("", { status: 504, statusText: "Gateway Timeout" });
+        })
+      )
     );
     return;
   }
